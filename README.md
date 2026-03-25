@@ -1,2 +1,2 @@
-# Digtal-Human-Companion-System
+# Digital-Human-Companion-System
 服务外包大赛【A22】基于AI大语言模型的情感陪护虚拟数字人系统
