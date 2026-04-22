@@ -1,0 +1,55 @@
+# ============================================================
+# .dockerignore - 排除不需要打包进 Docker 镜像的文件
+# ============================================================
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 虚拟环境
+.venv/
+venv/
+env/
+.conda/
+
+# IDE
+.cph/
+.vscode/
+.idea/
+
+# Git
+.git
+.gitignore
+
+# 运行时状态文件（每次启动应为纯净状态）
+session_memory.json
+
+# 开发文档（不需要进镜像）
+README.md
+audio2face_model_适配说明.txt
+*.md
+
+# Docker 自身文件
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+
+
+# 下载脚本（模型已打包进镜像，不需要）
+download_xlsr53.py
+
+# ============================================================
+# 注意：以下文件/目录 **不排除**，会被 COPY 进镜像：
+#   - audio2face_model.pth        (面部动画模型)
+#   - models/                     (whisper-small 基础模型)
+#   - whisper-final-model/        (LoRA 适配器)
+#   - wav2vec2_xlsr53_local/      (XLSR-53 编码器)
+#   - vector_db/                  (ChromaDB 知识库)
+#   - psy_data.json               (心理知识数据)
+#   - public/                     (前端静态资源)
+#   - .env                        (环境变量配置)
+#   - *.py                        (业务代码)
+# ============================================================
