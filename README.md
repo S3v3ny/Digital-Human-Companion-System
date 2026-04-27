@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Digtal-Human-Companion-System
 
 【A22】基于AI大语言模型的情感陪护虚拟数字人系统
