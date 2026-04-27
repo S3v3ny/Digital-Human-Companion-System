@@ -1,0 +1,36 @@
+# ============================================================
+# docker-compose.yml - 一键启动情感陪护虚拟数字人系统
+# ============================================================
+# 使用方法：
+#   docker compose up          # 前台启动（可看日志）
+#   docker compose up -d       # 后台启动
+#   docker compose down        # 停止并移除容器
+#   docker compose logs -f     # 查看实时日志
+#
+# 前提条件：
+#   1. 宿主机已安装 NVIDIA 驱动（>= 530）
+#   2. 已安装 NVIDIA Container Toolkit
+#      安装指南：https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+# ============================================================
+
+services:
+  digital-human:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: digital-human:latest
+    container_name: digital-human
+    ports:
+      - "8000:8000"
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    # GPU 支持：自动映射所有 GPU，无需手动加 --gpus all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>温心陪伴 - 数字人聊天助手</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+
+<body>
+
+  <!-- 选择页面 -->
+  <div id="selectPage" class="page active">
+    <div class="select-container">
+      <div class="header-section">
+        <h1>温心陪伴</h1>
+        <p class="subtitle">选择您的陪伴朋友</p>
+      </div>
+      <div class="avatar-grid">
+        <div class="avatar-card" data-id="1">
+          <div class="avatar-image avatar-friend1">👧</div>
+          <h3>小丽</h3>
+          <p>贴心孙女 · 温柔陪伴</p>
+          <button class="select-btn" onclick="selectAvatar(1)">选择</button>
+        </div>
+        <div class="avatar-card" data-id="2">
+          <div class="avatar-image avatar-friend2">👴</div>
+          <h3>老王</h3>
+          <p>同龄老友 · 唠嗑谈心</p>
+          <button class="select-btn" onclick="selectAvatar(2)">选择</button>
+        </div>
+        <div class="avatar-card" data-id="3">
+          <div class="avatar-image avatar-friend3">🧑</div>
+          <h3>小明</h3>
+          <p>年轻伙伴 · 活力陪聊</p>
+          <button class="select-btn" onclick="selectAvatar(3)">选择</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 聊天页面 -->
+  <div id="chatPage" class="page">
+    <div class="chat-layout">
+
+      <!-- 左侧：数字人信息（小卡片样式） -->
+      <div class="left-section">
+        <div class="avatar-card small-card">
+          <div id="avatarContainer" class="avatar-image">👧</div>
+          <h3 id="botName"></h3>
+          <p id="botDesc"></p>
+        </div>
+        <!-- 关怀模式切换按钮 -->
+        <button id="careModeToggle" class="care-mode-btn" type="button" onclick="toggleCareMode()">
+          <span class="care-icon">👁️</span> 关怀模式
+        </button>
+        <button id="newSessionBtn" class="new-session-btn" type="button" onclick="newConversation()">
+          <span class="btn-icon">✨</span> 开启新对话
+        </button>
+        <div class="history-title">
+          <span>📋 历史会话</span>
+          <span class="session-count" id="sessionCount"></span>
+        </div>
+        <div id="sessionList" class="session-list">
+          <!-- 会话列表将在这里动态生成 -->
+        </div>
+        <!-- 用户称呼设置 -->
+        <div class="user-name-section">
+          <label for="userNameInput">👤 您的称呼</label>
+          <div class="name-input-wrapper">
+            <input type="text" id="userNameInput" placeholder="例如：王爷爷" maxlength="10">
+            <button class="save-name-btn" onclick="saveUserName()">保存</button>
+          </div>
+          <p class="name-hint">设置后，数字人会记住您的名字哦</p>
+        </div>
+      </div>
+
+      <!-- 中间：数字人大区域 -->
+      <div class="center-section">
+        <div id="digitalHumanArea" class="digital-human-container">
+          <!-- 呼吸灯效果层 -->
+          <div id="breathingLight" class="breathing-light"></div>
+          <!-- 状态提示 -->
+          <div id="avatarStatus" class="avatar-status">
+            <span id="statusText">👋 在线</span>
+          </div>
+        </div>
+        <!-- 按住说话按钮 -->
+        <button id="centerVoiceBtn" class="center-voice-btn" type="button" onmousedown="startVoiceRecording()"
+          onmouseup="stopVoiceRecording()" ontouchstart="startVoiceRecording()" ontouchend="stopVoiceRecording()">
+          <span class="voice-icon">🎙️</span> 按住说话
+        </button>
+      </div>
+
+      <!-- 右侧：右上角用户区 + 聊天记录 + 输入区 -->
+      <div class="right-section">
+        <!-- 顶部用户信息和时间问候 -->
+        <div class="top-user-area">
+          <div class="greeting-section">
+            <span id="timeGreeting" class="time-greeting">下午好</span>
+            <span id="userDisplayName" class="user-display-name">朋友</span>
+          </div>
+          <video id="camera" class="camera-preview" autoplay muted playsinline></video>
+          <div class="camera-hint">📷 摄像头已开启（用于表情识别）</div>
+        </div>
+
+        <div class="chat-history-area">
+          <div id="messagesContainer" class="history-list"></div>
+        </div>
+
+        <!-- 快捷短语区域 -->
+        <div class="quick-phrases">
+          <button class="phrase-btn" onclick="sendQuickPhrase('今天天气怎么样？')">
+            <span class="phrase-icon">☀️</span> 天气
+          </button>
+          <button class="phrase-btn" onclick="sendQuickPhrase('给我讲个笑话')">
+            <span class="phrase-icon">😊</span> 讲笑话
+          </button>
+          <button class="phrase-btn" onclick="sendQuickPhrase('唱首歌给我听')">
+            <span class="phrase-icon">🎵</span> 听歌
+          </button>
+          <button class="phrase-btn" onclick="sendQuickPhrase('我有点闷，陪我聊聊')">
+            <span class="phrase-icon">💬</span> 解闷
+          </button>
+          <button class="phrase-btn" onclick="sendQuickPhrase('给我讲个故事')">
+            <span class="phrase-icon">📖</span> 听故事
+          </button>
+          <button class="phrase-btn" onclick="sendQuickPhrase('今天有什么养生小知识？')">
+            <span class="phrase-icon">🌿</span> 养生
+          </button>
+        </div>
+
+        <!-- 输入区域 -->
+        <div class="input-area">
+          <input type="text" id="messageInput" placeholder="输入内容...">
+          <button id="sendBtn">发送</button>
+        </div>
+      </div>
+    </div>
+
+    <button class="back-btn" onclick="goBack()">
+      <span>←</span> 返回选择
+    </button>
+  </div>
+
+  <!-- 数字人 SDK（使用本地文件，通过后端 /static/ 服务） -->
+  <script src="/static/three.min.js"></script>
+  <script src="/static/GLTFLoader.js"></script>
+  <script src="/static/OrbitControls.js"></script>
+  <script src="/static/script.js?v=3"></script>
+</body>
+
+</html>
