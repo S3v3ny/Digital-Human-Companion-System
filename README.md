@@ -26,7 +26,7 @@ git clone https://github.com/CtrlCSV/Digital-Human-Companion-System
 
 ### 2. 文件补全
 
-本项目使用了[thu-coai/PsyQA](https://github.com/thu-coai/PsyQA "一个中文心理健康支持问答数据集，提供了丰富的援助策略标注。可用于生成富有援助策略的长咨询文本。")数据集，可跳转到对应仓库下载（下载后直接放到项目文件夹下即可），也可使用其他数据集。
+本项目使用了[thu-coai/PsyQA](https://github.com/thu-coai/PsyQA "一个中文心理健康支持问答数据集，提供了丰富的援助策略标注。可用于生成富有援助策略的长咨询文本。")数据集，可跳转到对应仓库下载（下载后重命名为psy_data.json后，直接放到项目文件夹下即可），也可使用其他数据集。
 
 其余模型文件提供网盘下载链接，放到对应目录下即可。
 
