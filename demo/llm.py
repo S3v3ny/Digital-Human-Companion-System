@@ -20,10 +20,16 @@ MAX_HISTORY_MESSAGES = 6
 # --- 【2. 全局加载知识库组件】 ---
 print("正在加载 RAG 检索模块...")
 # 加载向量模型
-embedder = SentenceTransformer('BAAI/bge-small-zh-v1.5')
+_BGE_LOCAL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "bge-small-zh-v1.5")
+embedder = SentenceTransformer(_BGE_LOCAL if os.path.isdir(_BGE_LOCAL) else 'BAAI/bge-small-zh-v1.5')
 # 连接本地数据库 (注意：确保启动 server.py 时的终端路径在 demo 文件夹下)
 chroma_client = chromadb.PersistentClient(path="./vector_db")
-psy_collection = chroma_client.get_collection(name="psy_cbt_knowledge")
+try:
+    psy_collection = chroma_client.get_collection(name="psy_cbt_knowledge")
+    print(f"[RAG] 知识库已加载，共 {psy_collection.count()} 条数据")
+except Exception:
+    psy_collection = chroma_client.get_or_create_collection(name="psy_cbt_knowledge")
+    print("[RAG] 知识库为空，RAG 功能不可用。请先运行 build_kb.py 导入数据。")
 # --------------------------------
 
 INTERRUPT_COMMAND_HINTS = [

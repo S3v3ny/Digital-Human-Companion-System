@@ -1,3 +1,4 @@
+import os
 import json
 import chromadb
 from sentence_transformers import SentenceTransformer
@@ -5,9 +6,10 @@ from sentence_transformers import SentenceTransformer
 # ==========================================
 # 1. 初始化核心组件
 # ==========================================
-print("正在加载 Embedding 模型 (首次运行会自动下载 BGE 模型)...")
-# BGE-small-zh-v1.5 是目前中文支持极好且体积非常小的向量模型
-embedder = SentenceTransformer('BAAI/bge-small-zh-v1.5')
+print("正在加载 Embedding 模型...")
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_BGE_LOCAL = os.path.join(_BASE_DIR, "models", "bge-small-zh-v1.5")
+embedder = SentenceTransformer(_BGE_LOCAL if os.path.isdir(_BGE_LOCAL) else 'BAAI/bge-small-zh-v1.5')
 
 print("正在初始化 ChromaDB 本地持久化存储...")
 # PersistentClient 会在当前目录下生成一个 vector_db 文件夹，把数据写进硬盘

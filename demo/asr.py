@@ -1,4 +1,8 @@
 import torch
+try:
+    import torch.distributed.tensor  # peft 0.19.x 需要此子模块已被导入
+except ImportError:
+    pass
 import speech_recognition as sr
 import numpy as np
 from transformers import WhisperProcessor, WhisperForConditionalGeneration
@@ -42,28 +46,28 @@ class CustomASR:
         if audio_bytes is not None:
             # ── WebSocket 模式：直接解析传入的音频字节 ──
             try:
-                print("⏳ 正在本地识别（字节流模式）...")
+                print("[ASR] 正在本地识别（字节流模式）...")
                 audio_np = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
             except Exception as e:
                 return f"音频解析失败: {e}"
         else:
             # ── 麦克风模式（独立运行时使用）──
             with sr.Microphone() as source:
-                print("\n🎤 系统已就绪，请说话...")
+                print("[ASR] 系统已就绪，请说话...")
                 self.recognizer.adjust_for_ambient_noise(source, duration=0.8)
                 audio = self.recognizer.listen(source)
             wav_data = audio.get_raw_data(convert_rate=16000, convert_width=2)
             audio_np = np.frombuffer(wav_data, dtype=np.int16).astype(np.float32) / 32768.0
 
         try:
-            print("⏳ 正在本地识别...")
+            print("[ASR] 正在本地识别...")
             
             # 提取特征
             input_features = self.processor(
                 audio_np, 
                 sampling_rate=16000, 
                 return_tensors="pt"
-            ).input_features.to("cuda")
+            ).input_features.to("cuda" if torch.cuda.is_available() else "cpu")
 
             # 本地推理生成
             with torch.no_grad():

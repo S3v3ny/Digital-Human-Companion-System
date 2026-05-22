@@ -7,10 +7,14 @@ import io
 import wave
 import struct
 import traceback
+import mimetypes
 import numpy as np
 import contextlib
 from itertools import count
 from dotenv import load_dotenv
+
+# Ensure .mjs files are served with the correct JavaScript MIME type
+mimetypes.add_type('text/javascript', '.mjs')
 
 load_dotenv()  # 自动读取同目录的 .env 文件
 
@@ -168,7 +172,7 @@ async def send_stop_output(websocket: WebSocket, response_id: int, reason="barge
 # =========================================================
 # 文本生成语音+口型并发送
 # =========================================================
-async def send_chunk_packet(websocket, response_state, seq, clean_text, audio_bytes, visemes, is_current_response):
+async def send_chunk_packet(websocket, response_state, seq, clean_text, audio_bytes, visemes, is_current_response, emotion="neutral"):
     if not is_current_response(response_state.response_id):
         response_state.interrupted = True
         return False
@@ -187,6 +191,9 @@ async def send_chunk_packet(websocket, response_state, seq, clean_text, audio_by
 
     if visemes:  # 非空列表才发送，减少带宽
         payload["visemes"] = visemes
+
+    if emotion and emotion != "neutral":
+        payload["emotion"] = emotion
 
     sent = await safe_send(websocket, payload)
     if sent:
@@ -256,6 +263,24 @@ async def speak_and_send(websocket, text_chunk, avatar_id, response_state, is_cu
                 response_state.mark_chunk_done(clean_text)
             return sent
         return False
+
+
+# ── 文本情感检测（关键词匹配，零延迟）───────────────────────────────────────
+_EMOTION_KW = {
+    "happy":    ["开心", "高兴", "太好了", "太棒了", "真棒", "厉害", "加油", "相信你", "没问题",
+                 "放心", "很好", "不错", "好极了", "完美", "恭喜", "祝贺", "愉快", "轻松", "快乐"],
+    "sad":      ["难过", "伤心", "担心", "心疼", "辛苦", "委屈", "不容易", "艰难", "痛苦",
+                 "难受", "悲伤", "眼泪", "哭泣", "遗憾", "惋惜"],
+    "surprise": ["真的吗", "没想到", "居然", "竟然", "哇", "原来如此", "太意外", "太惊讶"],
+    "caring":   ["理解你", "明白你", "能感受到", "陪着你", "慢慢来", "没关系", "安心",
+                 "我在这", "不用担心", "都会好的", "一起", "支持你", "温暖"],
+}
+
+def detect_text_emotion(text: str) -> str:
+    for emotion, keywords in _EMOTION_KW.items():
+        if any(kw in text for kw in keywords):
+            return emotion
+    return "neutral"
 
 
 def is_tts_speakable_text(text: str) -> bool:
@@ -348,6 +373,7 @@ async def process_user_message(
             task = asyncio.create_task(synthesize_chunk_pipeline(clean_text, role))
             task.clean_text = clean_text
             task.seq = response_state.mark_chunk_enqueued(clean_text)
+            task.emotion = detect_text_emotion(clean_text)
             pending_tasks.add(task)
 
         async def flush_ready(force=False):
@@ -369,6 +395,7 @@ async def process_user_message(
                         audio_bytes,
                         visemes,
                         is_current_response,
+                        emotion=getattr(next_task, "emotion", "neutral"),
                     )
                     has_sent = has_sent or sent or bool(clean_text)
                 except asyncio.CancelledError:

@@ -19,7 +19,7 @@ def get_face_emotion(img_bytes): # 1. 添加参数接收字节流
             enforce_detection=False 
         )
         emotion = result[0]["dominant_emotion"]
-        print(f"✅ 当前情绪：{emotion}")
+        print(f"[emotion] 当前情绪: {emotion}")
         return emotion
 
     except Exception as e:

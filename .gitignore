@@ -1,0 +1,49 @@
+# 虚拟环境
+demo/venv/
+venv/
+.venv/
+env/
+
+# 模型文件（体积过大，从 HuggingFace 下载）
+demo/models/
+demo/wav2vec2_xlsr53_local/
+*.pth
+*.safetensors
+*.bin
+*.pt
+
+# 保留项目自己的 LoRA 微调权重
+!demo/whisper-final-model/adapter_model.safetensors
+
+# 知识库数据库
+demo/vector_db/
+
+# 数据集
+psy_data.json
+demo/psy_data.json
+
+# 环境变量
+.env
+demo/.env
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# HuggingFace 缓存
+.cache/
+
+# 日志
+*.log
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
