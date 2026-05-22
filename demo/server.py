@@ -37,9 +37,8 @@ from asr import asr_engine  # 此时 asr.py 内部已改为加载 whisper-final-
 from emotion import get_face_emotion
 from tts import tts_engine, TTSGenerationError
 
-from faceformer_adapter import audio_bytes_to_listener_reaction
-
-traceback.print_exc()
+from faceformer_adapter import audio_bytes_to_user_emotion
+from tools import get_weather, get_calendar
 
 app = FastAPI()
 
@@ -58,7 +57,29 @@ MIN_CHUNK_LENGTH = 14
 MAX_CHUNK_LENGTH = 38
 MIN_SENTENCE_LENGTH = 4  # 句末标点分割的最小长度（防止空句）
 TTS_PREFETCH_CHUNKS = 2
-PUNCTUATION_ONLY_PATTERN = re.compile(r'^[\s。，！？,.!?、；;：:~～…]+$')
+# 纯"非内容字符"判定：含中英文标点、引号、括号、空白
+PUNCTUATION_ONLY_PATTERN = re.compile(r'^[\s。，！？,.!?、；;：:~～…“”"\'\'「」『』《》（）\(\)\[\]【】—\-—\.]+$')
+
+# 清洗 LLM 偶尔泄露的工具标签和 markdown 标记
+_META_TAG_PATTERN = re.compile(r'【[^】]{0,30}】')          # 去掉 【实时天气】【念稿要求】等元标签
+_MARKDOWN_BOLD_PATTERN = re.compile(r'\*{1,3}')             # ** 加粗
+_MARKDOWN_HEADING_PATTERN = re.compile(r'^#{1,6}\s*', re.MULTILINE)
+_MARKDOWN_CODE_PATTERN = re.compile(r'`{1,3}')
+_BACKSLASH_NEWLINE_PATTERN = re.compile(r'\\n')
+_MULTI_SPACE_PATTERN = re.compile(r'[ \t]{2,}')
+
+
+def sanitize_chunk(text: str) -> str:
+    """去掉模型偶尔泄露的工具元标签、markdown 标记，避免出现在聊天气泡里。"""
+    if not text:
+        return ''
+    text = _META_TAG_PATTERN.sub('', text)
+    text = _MARKDOWN_HEADING_PATTERN.sub('', text)
+    text = _MARKDOWN_BOLD_PATTERN.sub('', text)
+    text = _MARKDOWN_CODE_PATTERN.sub('', text)
+    text = _BACKSLASH_NEWLINE_PATTERN.sub(' ', text)
+    text = _MULTI_SPACE_PATTERN.sub(' ', text)
+    return text.strip()
 
 # 1. 静态资源托管（限制只能访问 public 文件夹里的前端文件）
 app.mount("/static", StaticFiles(directory="./public"), name="static")
@@ -211,23 +232,18 @@ async def synthesize_chunk_pipeline(clean_text, role):
 
 
 async def speak_and_send(websocket, text_chunk, avatar_id, response_state, is_current_response):
-    print(f"-> 准备合成的文本片段: [{text_chunk}]")
-
     clean_text = (text_chunk or "").strip()
     if not clean_text:
-        print("-> 跳过空文本片段")
         return False
 
     if not is_current_response(response_state.response_id):
         response_state.interrupted = True
-        print(f"-> 轮次已失效，跳过TTS: response_id={response_state.response_id}")
         return False
 
     role = resolve_role(avatar_id)
     seq = response_state.mark_chunk_enqueued(clean_text)
 
     try:
-        print(f"-> 开始TTS: role={role}, avatar_id={avatar_id}, seq={seq}, 文本长度={len(clean_text)}, 文本=[{clean_text}]")
         audio_bytes, visemes = await synthesize_chunk_pipeline(clean_text, role)
         return await send_chunk_packet(
             websocket,
@@ -241,14 +257,10 @@ async def speak_and_send(websocket, text_chunk, avatar_id, response_state, is_cu
 
     except asyncio.CancelledError:
         response_state.interrupted = True
-        print(f"TTS任务被取消: response_id={response_state.response_id}, seq={seq}")
         raise
 
     except TTSGenerationError as e:
-        print(
-            f"TTS生成失败，已回退为纯文本: role={role}, avatar_id={avatar_id}, "
-            f"文本长度={len(clean_text)}, 文本=[{clean_text}], 错误={e}"
-        )
+        print(f"[TTS] 合成失败，回退文本: seq={seq}, 错误={e}")
         if is_current_response(response_state.response_id):
             sent = await safe_send(websocket, {
                 "type": "assistant_chunk",
@@ -368,7 +380,6 @@ async def process_user_message(
 
         async def schedule_chunk(clean_text: str):
             if not is_tts_speakable_text(clean_text):
-                print(f"-> 跳过不可合成的纯标点片段: [{clean_text}]")
                 return
             task = asyncio.create_task(synthesize_chunk_pipeline(clean_text, role))
             task.clean_text = clean_text
@@ -465,6 +476,10 @@ async def process_user_message(
                 if not is_current_response(response_state.response_id):
                     response_state.interrupted = True
                     return
+                # 清洗：去掉工具元标签 / markdown / 多余空格
+                text_chunk = sanitize_chunk(text_chunk)
+                if not text_chunk or PUNCTUATION_ONLY_PATTERN.fullmatch(text_chunk):
+                    continue  # 清洗后空了或纯标点，跳过不发
                 await chunk_queue.put(text_chunk)
                 await safe_send(websocket, {
                     "type": "assistant_text_delta",
@@ -493,8 +508,8 @@ async def process_user_message(
                 await handle_text_piece(char)
 
         if sentence_buffer.strip() and is_current_response(response_state.response_id):
-            tail_text = sentence_buffer.strip()
-            if is_tts_speakable_text(tail_text):
+            tail_text = sanitize_chunk(sentence_buffer.strip())
+            if tail_text and is_tts_speakable_text(tail_text):
                 await chunk_queue.put(tail_text)
                 await safe_send(websocket, {
                     "type": "assistant_text_delta",
@@ -502,8 +517,6 @@ async def process_user_message(
                     "delta": tail_text,
                     "fullText": response_state.full_text,
                 })
-            else:
-                print(f"-> 尾部纯标点不进入TTS队列: [{tail_text}]")
 
         response_state.llm_done = True
         await chunk_queue.put(sentinel)
@@ -529,11 +542,10 @@ async def process_user_message(
 
     except asyncio.CancelledError:
         response_state.interrupted = True
-        print(f"对话任务被取消: response_id={response_state.response_id}")
         raise
 
     except Exception as e:
-        print("处理对话时发生异常:", e)
+        print(f"[chat] 处理对话异常: {e}")
         if is_current_response(response_state.response_id):
             await safe_send(websocket, {"type": "error", "message": "处理消息时出错了"})
 
@@ -562,6 +574,20 @@ async def process_user_message(
 @app.get("/")
 async def get_index():
     return FileResponse("./public/index.html")
+
+
+# =========================================================
+# 实时数据接口（给右侧信息卡用）
+# =========================================================
+@app.get("/api/weather")
+async def api_weather(city: Optional[str] = None):
+    data = await get_weather(city)
+    return JSONResponse(data)
+
+
+@app.get("/api/calendar")
+async def api_calendar():
+    return JSONResponse({"ok": True, **get_calendar()})
 
 # ==========================================
 # 【漏洞1修补】：官方 ASR 评测打分接口
@@ -807,28 +833,26 @@ async def websocket_chat(websocket: WebSocket):
 
                     loop = asyncio.get_running_loop()
 
-                    # [新增] 用户音频 → 聆听反应 与 ASR 并行执行，减少总等待时间
-                    # audio2face_model 的正确语义：Speaker(用户)音频 → Listener(数字人)聆听反应
-                    reaction_future = loop.run_in_executor(
+                    # 用户音频 → SER 主情感（陪伴式共情）与 ASR 并行
+                    emotion_future = loop.run_in_executor(
                         None,
-                        audio_bytes_to_listener_reaction,
+                        audio_bytes_to_user_emotion,
                         audio_bytes
                     )
 
-                    # ASR 识别用户文本（与聆听反应计算并行）
+                    # ASR 识别用户文本（与情感识别并行）
                     user_text = await loop.run_in_executor(
                         None,
                         asr_engine.speech_to_text,
                         audio_bytes
                     )
 
-                    # 等待聆听反应计算完成，推送给前端驱动数字人表情
-                    reaction_frames = await reaction_future
-                    if reaction_frames:
+                    # 等待 SER，推送主情感给前端，让数字人在 LLM 思考间隙做共情表情
+                    user_emotion_label = await emotion_future
+                    if user_emotion_label:
                         await safe_send(websocket, {
-                            "type": "listener_reaction",
-                            "frames": reaction_frames,  # [{emotion:[25维], fv:[58维ARKit blendshape]}, ...] 前端使用fv驱动
-                            "fps": 25,
+                            "type": "user_emotion",
+                            "emotion": user_emotion_label,
                         })
 
                     if user_text:

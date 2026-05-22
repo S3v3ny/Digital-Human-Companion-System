@@ -274,3 +274,18 @@ def _fallback(audio_bytes: bytes) -> list:
 def audio_bytes_to_lipsync(audio_bytes: bytes):
     """口型同步由 Azure TTS viseme 方案处理，此处返回 None。"""
     return None
+
+
+def audio_bytes_to_user_emotion(audio_bytes: bytes):
+    """仅返回 SER 主情感标签（归一化后），用于陪伴式共情表情。"""
+    try:
+        audio_data = _decode_audio(audio_bytes)
+        pipe = _get_ser_pipeline()
+        results = pipe({"raw": audio_data, "sampling_rate": SR}, top_k=None)
+        dominant = max(results, key=lambda r: r["score"])
+        label = _normalize_label(dominant["label"])
+        print(f"[SER] user_emotion = {label} ({dominant['score']:.2f})")
+        return label
+    except Exception as e:
+        print(f"[SER] user_emotion 失败: {e}")
+        return None

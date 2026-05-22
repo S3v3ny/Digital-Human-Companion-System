@@ -69,15 +69,18 @@ function setStatus(s) {
   if (['listening', 'thinking', 'speaking'].includes(s.key)) light.classList.add('active', s.key);
 }
 
-function getGreeting() {
+function getGreetingInfo() {
   const h = new Date().getHours();
-  if (h >= 5 && h < 9)  return '🌅 早上好';
-  if (h >= 9 && h < 12) return '☀️ 上午好';
-  if (h >= 12 && h < 14) return '🌞 中午好';
-  if (h >= 14 && h < 18) return '🌤️ 下午好';
-  if (h >= 18 && h < 22) return '🌙 晚上好';
-  return '🌛 夜深了';
+  if (h >= 5 && h < 9)  return { text: '早上好', icon: 'sunrise' };
+  if (h >= 9 && h < 12) return { text: '上午好', icon: 'sun' };
+  if (h >= 12 && h < 14) return { text: '中午好', icon: 'sun' };
+  if (h >= 14 && h < 18) return { text: '下午好', icon: 'cloud-sun' };
+  if (h >= 18 && h < 22) return { text: '晚上好', icon: 'moon' };
+  return { text: '夜深了', icon: 'moon-star' };
 }
+
+// 兼容旧调用（如 personalGreeting）
+function getGreeting() { return getGreetingInfo().text; }
 
 function getTimePrefix() {
   const h = new Date().getHours();
@@ -158,33 +161,6 @@ function destroyHeadAudio() {
   _haDelayNode = null;
 }
 
-// Azure TTS viseme ID (0-21) → OVR/TalkingHead viseme name
-// Silence (id=0) maps to null and is skipped.
-const _AZURE_TO_OVR = [
-  null,  // 0  silence
-  'aa',  // 1  æ ə ʌ
-  'aa',  // 2  ɑ
-  'O',   // 3  ɔ
-  'E',   // 4  eɪ
-  'I',   // 5  ɪ
-  'U',   // 6  ʊ w
-  'U',   // 7  uː
-  'O',   // 8  oʊ
-  'aa',  // 9  aʊ
-  'O',   // 10 ɔɪ
-  'aa',  // 11 aɪ
-  'CH',  // 12 h
-  'RR',  // 13 ɹ
-  'nn',  // 14 l
-  'SS',  // 15 s z
-  'CH',  // 16 ʃ tʃ dʒ
-  'TH',  // 17 θ ð
-  'FF',  // 18 f v
-  'DD',  // 19 d t n
-  'kk',  // 20 k g
-  'PP',  // 21 p b m
-];
-
 // ---------------------- AudioPlayer (TalkingHead-backed) ----------------------
 // TalkingHead's playAudio() requires an AudioBuffer, NOT a data-URL string.
 // We decode base64 → ArrayBuffer → AudioBuffer asynchronously, then flush
@@ -237,27 +213,18 @@ function createBotBubble(responseId, text) {
     state.botChunks = [];
     state.currentChunkEl = null;
   }
-  const div = document.createElement('div');
-  div.className = 'message message-bot';
-  div.dataset.responseId = String(responseId);
-  div.textContent = text;
-  dom.messagesContainer.appendChild(div);
-  state.currentChunkEl = div;
+  const wrapper = document.createElement('div');
+  wrapper.className = 'message message-bot';
+  wrapper.dataset.responseId = String(responseId);
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.textContent = text;
+  wrapper.appendChild(bubble);
+  dom.messagesContainer.appendChild(wrapper);
+  state.currentChunkEl = bubble;
   state.botChunks.push(text);
   scrollToBottom();
-  return div;
-}
-
-function updateCurrentBubble(responseId, text) {
-  if (state.responseId !== responseId) {
-    state.responseId = responseId;
-    state.botChunks = [];
-    state.currentChunkEl = null;
-  }
-  if (!state.currentChunkEl) return createBotBubble(responseId, text);
-  state.currentChunkEl.textContent = text;
-  state.botChunks[state.botChunks.length - 1] = text;
-  scrollToBottom();
+  return wrapper;
 }
 
 function getBotFullText() { return state.botChunks.join(''); }
@@ -271,8 +238,11 @@ function showThinking(show) {
   if (show) {
     if (!state.thinkingEl) {
       state.thinkingEl = document.createElement('div');
-      state.thinkingEl.className = 'message message-thinking';
-      state.thinkingEl.innerHTML = '<span class="thinking-dots">🤔 正在思考...</span>';
+      state.thinkingEl.className = 'message message-bot message-thinking';
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.innerHTML = '<span class="thinking-dots">🤔 正在思考</span>';
+      state.thinkingEl.appendChild(bubble);
       dom.messagesContainer.appendChild(state.thinkingEl);
       scrollToBottom();
     }
@@ -288,6 +258,15 @@ const _MOOD_MAP = {
   caring: 'love', neutral: 'neutral',
 };
 
+// 用户语音情感 → 数字人表情（陪伴式：不镜像负面情绪，转为关切）
+const _USER_EMPATHY_MAP = {
+  happy: 'happy', excited: 'happy',
+  sad: 'love', fear: 'love', frustrated: 'sad',
+  angry: 'sad', disgust: 'neutral',
+  surprise: 'surprised',
+  neutral: 'neutral', bored: 'neutral',
+};
+
 function setAvatarEmotion(key) {
   if (talkingHead) talkingHead.setMood(_MOOD_MAP[key] || 'neutral');
 }
@@ -300,8 +279,6 @@ function clearAvatarEmotion() {
 // TalkingHead handles lipsync and idle animation internally.
 function clearVisemeTimers() {}
 function setAvatarMouth(v) {}
-let listenerAnimTimer = null;
-function playListenerReactionAnimation(frames, fps) {}
 async function startMicLipSync() {}
 function stopMicLipSync() {}
 function refreshAvatarSize() {}
@@ -352,14 +329,12 @@ const msgHandlers = {
     const delta = d.delta || d.text || '';
     if (delta) createBotBubble(rid, delta);
   },
-  listener_reaction(d) {
-    const frames = d.frames || [];
-    const fps = d.fps || 25;
-    if (frames.length) playListenerReactionAnimation(frames, fps);
+  user_emotion(d) {
+    const mood = _USER_EMPATHY_MAP[d.emotion] || 'neutral';
+    if (talkingHead) talkingHead.setMood(mood);
   },
   turn_start(d) {
     showThinking(false);
-    if (listenerAnimTimer !== null) { clearInterval(listenerAnimTimer); listenerAnimTimer = null; }
     clearVisemeTimers();
     setAvatarMouth(0);
     clearAvatarEmotion();
@@ -526,6 +501,15 @@ async function initAndLoadAvatar(avatar) {
     lipsyncLang: 'zh',
   });
 
+  // 强制锁定上半身视角，并微调让画面更居中、更近一些
+  try {
+    talkingHead.setView('upper', {
+      cameraDistance: -1.0,  // 相机更靠近 → 主体变大
+      cameraY: 0.15,         // look-at 略下移 → 头部从画面顶部移到更居中位置
+      cameraX: 0,            // 水平居中
+    });
+  } catch (e) { console.warn('setView failed', e); }
+
   // Wire up real-time audio-driven lipsync via HeadAudio
   await initHeadAudio();
 }
@@ -557,6 +541,19 @@ function formatPreview(session) {
   return `${last.role === 'user' ? '我' : state.avatar.name}：${text}`;
 }
 
+function formatRelativeTime(timestamp) {
+  const d = new Date(timestamp);
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  const yesterday = new Date(now.getTime() - 86400000);
+  const isYesterday = d.toDateString() === yesterday.toDateString();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  if (isToday) return `今天 ${hh}:${mm}`;
+  if (isYesterday) return `昨天 ${hh}:${mm}`;
+  return `${d.getMonth() + 1}月${d.getDate()}日`;
+}
+
 function renderSessionList() {
   dom.sessionList.innerHTML = '';
   const sorted = getAvatarSessions().sort((a, b) => b.updated - a.updated);
@@ -567,16 +564,29 @@ function renderSessionList() {
     const item = document.createElement('div');
     item.className = `session-item${session.id === state.sessionId ? ' active' : ''}`;
     item.dataset.sessionId = session.id;
+
+    const content = document.createElement('div');
+    content.className = 'session-content';
+
+    const time = document.createElement('div');
+    time.className = 'session-time';
+    time.textContent = formatRelativeTime(session.updated);
+
     const summary = document.createElement('div');
     summary.className = 'session-summary';
     summary.textContent = session.title || formatPreview(session);
+
+    content.appendChild(time);
+    content.appendChild(summary);
+
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'session-delete-btn';
     del.dataset.deleteId = session.id;
     del.innerHTML = '🗑️';
     del.setAttribute('aria-label', '删除会话');
-    item.appendChild(summary);
+
+    item.appendChild(content);
     item.appendChild(del);
     dom.sessionList.appendChild(item);
   });
@@ -654,10 +664,13 @@ function deleteSession(sessionId) {
 
 // ---------------------- Chat ----------------------
 function addHistory(role, text) {
-  const div = document.createElement('div');
-  div.className = `message message-${role}`;
-  div.textContent = text;
-  dom.messagesContainer.appendChild(div);
+  const wrapper = document.createElement('div');
+  wrapper.className = `message message-${role}`;
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.textContent = text;
+  wrapper.appendChild(bubble);
+  dom.messagesContainer.appendChild(wrapper);
   scrollToBottom();
 }
 
@@ -690,14 +703,18 @@ function sendQuickPhrase(phrase) {
 
 // ---------------------- UI: CareMode / UserName ----------------------
 function toggleCareMode() {
-  document.body.classList.toggle('care-mode');
-  const on = document.body.classList.contains('care-mode');
+  const on = !document.body.classList.contains('care-mode');
+  document.body.classList.toggle('care-mode', on);
+  document.documentElement.classList.toggle('care-mode', on);
   localStorage.setItem('care-mode', on ? 'enabled' : 'disabled');
   showToast(on ? '✅ 已开启关怀模式，文字更大更清晰' : '关怀模式已关闭', 'info');
 }
 
 function applyCareModePreference() {
-  if (localStorage.getItem('care-mode') === 'enabled') document.body.classList.add('care-mode');
+  if (localStorage.getItem('care-mode') === 'enabled') {
+    document.body.classList.add('care-mode');
+    document.documentElement.classList.add('care-mode');
+  }
 }
 
 function loadUserName() {
@@ -722,7 +739,13 @@ function saveUserName() {
 }
 
 function updateTimeGreeting() {
-  if (dom.timeGreeting) dom.timeGreeting.textContent = getGreeting();
+  const info = getGreetingInfo();
+  if (dom.timeGreeting) dom.timeGreeting.textContent = info.text;
+  const iconBox = document.getElementById('timeGreetingIcon');
+  if (iconBox) {
+    iconBox.innerHTML = `<i data-lucide="${info.icon}" style="width:24px;height:24px;"></i>`;
+    if (window.lucide) window.lucide.createIcons();
+  }
 }
 
 // ---------------------- Voice Recognition ----------------------
@@ -774,7 +797,9 @@ function startVoiceRecording() {
   state.pressTimer = setTimeout(() => {
     state.isLongPress = true;
     const btn = document.getElementById('centerVoiceBtn');
-    if (btn) { btn.classList.add('recording'); btn.innerHTML = '<span class="voice-icon">🎙️</span> 录音中...'; }
+    if (btn) btn.classList.add('recording');
+    const label = document.getElementById('voiceLabel');
+    if (label) { label.textContent = '录音中...'; label.classList.add('text-danger-500'); }
     if (!_SRConstructor) { showToast('您的浏览器不支持语音识别功能', 'warning'); return; }
     state.recognition = createRecognitionInstance();
     try { state.recognition.start(); } catch (_) { showToast('语音识别暂时不可用', 'warning'); }
@@ -789,7 +814,9 @@ function stopVoiceRecording() {
   if (btn) btn.classList.remove('pressing');
   if (state.isLongPress) {
     state.isLongPress = false;
-    if (btn) { btn.classList.remove('recording'); btn.innerHTML = '<span class="voice-icon">🎙️</span> 按住说话'; }
+    if (btn) btn.classList.remove('recording');
+    const label = document.getElementById('voiceLabel');
+    if (label) { label.textContent = '按住 说话'; label.classList.remove('text-danger-500'); }
     if (state.recognition) { try { state.recognition.stop(); } catch (_) { stopVoiceUI(); } }
   } else {
     dom.messageInput.placeholder = '直接输入或长按说话';

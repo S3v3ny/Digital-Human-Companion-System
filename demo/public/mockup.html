@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>虚拟情感陪护 · 数字人陪伴您每一天</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            cream: {
+              50:  '#FDF9F1',
+              100: '#FAF3E4',
+              200: '#F3E8CF',
+              300: '#E8D5A8',
+            },
+            ink: {
+              900: '#3D2E1F',
+              700: '#5C4A36',
+              500: '#8B7A65',
+              400: '#A89B86',
+            },
+            warm: {
+              500: '#E89B4C',
+              600: '#D87E2A',
+            },
+            danger: {
+              500: '#E5564E',
+              50:  '#FCEBE9',
+            },
+          },
+          fontFamily: {
+            sans: ['"Noto Sans SC"', 'system-ui', 'sans-serif'],
+          },
+          boxShadow: {
+            soft: '0 2px 12px rgba(170, 130, 80, 0.06)',
+            card: '0 4px 20px rgba(170, 130, 80, 0.08)',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    html, body { font-family: 'Noto Sans SC', system-ui, sans-serif; }
+    html, body { height: 100%; overflow: hidden; }
+    body { background-color: #FDF9F1; color: #3D2E1F; font-size: 17px; }
+    /* Lucide 图标默认尺寸 */
+    [data-lucide] { width: 22px; height: 22px; stroke-width: 2; }
+    /* 自定义滚动条 */
+    .nice-scroll::-webkit-scrollbar { width: 8px; }
+    .nice-scroll::-webkit-scrollbar-thumb { background: #E8D5A8; border-radius: 8px; }
+    .nice-scroll::-webkit-scrollbar-track { background: transparent; }
+  </style>
+</head>
+
+<body class="h-screen overflow-hidden">
+
+  <div class="w-full h-screen px-4 py-3 flex flex-col gap-3">
+
+    <!-- ============ 顶部导航栏 ============ -->
+    <header class="flex-shrink-0 flex items-center justify-between bg-white rounded-2xl shadow-soft px-6 py-3">
+      <!-- 左侧 Logo + 标题 -->
+      <div class="flex items-center gap-4">
+        <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-warm-500 to-warm-600 flex items-center justify-center text-white shadow-md">
+          <i data-lucide="heart-handshake" style="width:30px;height:30px;"></i>
+        </div>
+        <div>
+          <h1 class="text-2xl font-bold text-ink-900 leading-tight">虚拟情感陪护</h1>
+          <p class="text-sm text-ink-500 mt-0.5">数字人陪伴您每一天</p>
+        </div>
+      </div>
+
+      <!-- 右侧 问候语 + 按钮 -->
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2 bg-cream-100 rounded-full px-5 py-2.5">
+          <i data-lucide="sun" class="text-warm-500" style="width:24px;height:24px;"></i>
+          <span class="text-lg font-medium text-ink-900">下午好，李叔叔</span>
+        </div>
+        <button class="flex items-center gap-2 border-2 border-cream-200 hover:border-warm-500 hover:bg-cream-50 transition rounded-full px-5 py-2.5 text-ink-700 font-medium">
+          <i data-lucide="settings"></i> 设置
+        </button>
+        <button class="flex items-center gap-2 border-2 border-danger-500 text-danger-500 hover:bg-danger-50 transition rounded-full px-5 py-2.5 font-medium">
+          <i data-lucide="log-out"></i> 退出
+        </button>
+      </div>
+    </header>
+
+    <!-- ============ 主体三栏 ============ -->
+    <main class="flex-1 min-h-0 grid grid-cols-12 gap-4">
+
+      <!-- ===== 左侧栏：历史对话 ===== -->
+      <aside class="col-span-12 lg:col-span-3 min-h-0 h-full">
+        <div class="bg-white rounded-2xl shadow-card flex flex-col h-full">
+          <!-- 标题 -->
+          <div class="flex items-center gap-2 px-5 py-4 border-b border-cream-100">
+            <i data-lucide="clock" class="text-warm-500" style="width:24px;height:24px;"></i>
+            <h2 class="text-xl font-bold text-ink-900">历史对话</h2>
+          </div>
+
+          <!-- 列表 -->
+          <div class="flex-1 overflow-y-auto nice-scroll px-3 py-2">
+            <button class="w-full text-left p-4 rounded-xl hover:bg-cream-50 transition flex items-center gap-3 border border-transparent hover:border-cream-200">
+              <div class="flex-1 min-w-0">
+                <div class="text-sm text-warm-600 font-medium mb-1">今天 10:30</div>
+                <div class="text-base text-ink-900 truncate">今天天气怎么样呀？</div>
+              </div>
+              <i data-lucide="chevron-right" class="text-ink-400 flex-shrink-0"></i>
+            </button>
+
+            <button class="w-full text-left p-4 rounded-xl hover:bg-cream-50 transition flex items-center gap-3 border border-transparent hover:border-cream-200">
+              <div class="flex-1 min-w-0">
+                <div class="text-sm text-warm-600 font-medium mb-1">今天 09:15</div>
+                <div class="text-base text-ink-900 truncate">小雅，给我念首古诗听听</div>
+              </div>
+              <i data-lucide="chevron-right" class="text-ink-400 flex-shrink-0"></i>
+            </button>
+
+            <button class="w-full text-left p-4 rounded-xl hover:bg-cream-50 transition flex items-center gap-3 border border-transparent hover:border-cream-200">
+              <div class="flex-1 min-w-0">
+                <div class="text-sm text-warm-600 font-medium mb-1">昨天 20:45</div>
+                <div class="text-base text-ink-900 truncate">血压有点高怎么办？</div>
+              </div>
+              <i data-lucide="chevron-right" class="text-ink-400 flex-shrink-0"></i>
+            </button>
+
+            <button class="w-full text-left p-4 rounded-xl hover:bg-cream-50 transition flex items-center gap-3 border border-transparent hover:border-cream-200">
+              <div class="flex-1 min-w-0">
+                <div class="text-sm text-warm-600 font-medium mb-1">昨天 16:20</div>
+                <div class="text-base text-ink-900 truncate">提醒我下午三点吃药</div>
+              </div>
+              <i data-lucide="chevron-right" class="text-ink-400 flex-shrink-0"></i>
+            </button>
+
+            <button class="w-full text-left p-4 rounded-xl hover:bg-cream-50 transition flex items-center gap-3 border border-transparent hover:border-cream-200">
+              <div class="flex-1 min-w-0">
+                <div class="text-sm text-warm-600 font-medium mb-1">昨天 09:00</div>
+                <div class="text-base text-ink-900 truncate">给孙女打个电话</div>
+              </div>
+              <i data-lucide="chevron-right" class="text-ink-400 flex-shrink-0"></i>
+            </button>
+
+            <button class="w-full text-left p-4 rounded-xl hover:bg-cream-50 transition flex items-center gap-3 border border-transparent hover:border-cream-200">
+              <div class="flex-1 min-w-0">
+                <div class="text-sm text-warm-600 font-medium mb-1">5月20日</div>
+                <div class="text-base text-ink-900 truncate">今天心情不太好...</div>
+              </div>
+              <i data-lucide="chevron-right" class="text-ink-400 flex-shrink-0"></i>
+            </button>
+
+            <button class="w-full text-left p-4 rounded-xl hover:bg-cream-50 transition flex items-center gap-3 border border-transparent hover:border-cream-200">
+              <div class="flex-1 min-w-0">
+                <div class="text-sm text-warm-600 font-medium mb-1">5月19日</div>
+                <div class="text-base text-ink-900 truncate">教我用微信视频</div>
+              </div>
+              <i data-lucide="chevron-right" class="text-ink-400 flex-shrink-0"></i>
+            </button>
+          </div>
+
+          <!-- 底部按钮 -->
+          <div class="px-4 py-3 border-t border-cream-100">
+            <button class="w-full py-3 bg-cream-100 hover:bg-cream-200 text-ink-900 font-medium rounded-xl transition">
+              查看更多记录
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- ===== 中间栏：核心交互 ===== -->
+      <section class="col-span-12 lg:col-span-6 min-h-0 h-full flex flex-col gap-3">
+
+        <!-- 视频通话区 -->
+        <div class="relative flex-[3] min-h-0 bg-gradient-to-br from-cream-200 to-cream-300 rounded-3xl overflow-hidden shadow-card">
+          <!-- 数字人头像（DiceBear 占位图，可替换为您的素材） -->
+          <img
+            src="https://api.dicebear.com/9.x/notionists/svg?seed=Xiaoya&backgroundColor=fde7c8,fef3e0&backgroundType=gradientLinear"
+            alt="数字人小雅"
+            class="absolute inset-0 w-full h-full object-contain"
+            onerror="this.src='https://api.dicebear.com/9.x/lorelei/svg?seed=Xiaoya'"
+          />
+          <div class="absolute inset-0 bg-gradient-to-b from-black/0 via-transparent to-black/10 pointer-events-none"></div>
+
+          <!-- 左上：状态标签 -->
+          <div class="absolute top-4 left-4 flex items-center gap-2 bg-emerald-500 text-white rounded-full px-4 py-2 shadow-lg">
+            <span class="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+            <span class="font-medium">数字人 · 小雅</span>
+          </div>
+
+          <!-- 右上：音量 + PiP -->
+          <div class="absolute top-4 right-4 flex items-start gap-3">
+            <button class="w-11 h-11 bg-white/90 hover:bg-white rounded-full flex items-center justify-center shadow-lg text-ink-700">
+              <i data-lucide="volume-2"></i>
+            </button>
+            <!-- 画中画用户摄像头 -->
+            <div class="w-36 h-24 rounded-xl overflow-hidden shadow-lg border-2 border-white relative bg-ink-900">
+              <img
+                src="https://api.dicebear.com/9.x/personas/svg?seed=LiUncle&backgroundColor=c5d4e8"
+                alt="您的画面"
+                class="w-full h-full object-cover"
+              />
+              <div class="absolute bottom-1 left-1 bg-black/60 text-white text-xs rounded px-1.5 py-0.5">您</div>
+            </div>
+          </div>
+
+          <!-- 左下：通话计时 -->
+          <div class="absolute bottom-4 left-4 flex items-center gap-2 bg-black/50 backdrop-blur text-white rounded-full px-4 py-2">
+            <span class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+            <span class="font-medium tabular-nums">通话中　00:12:36</span>
+          </div>
+        </div>
+
+        <!-- 当前对话气泡 -->
+        <div class="flex-[2] min-h-0 bg-white rounded-2xl shadow-card p-4 flex flex-col gap-3 overflow-y-auto nice-scroll">
+          <!-- AI 消息 -->
+          <div class="flex items-start gap-3">
+            <img
+              src="https://api.dicebear.com/9.x/notionists/svg?seed=Xiaoya&backgroundColor=fde7c8"
+              class="w-11 h-11 rounded-full flex-shrink-0 bg-cream-100"
+              alt="小雅"
+            />
+            <div class="bg-cream-100 rounded-2xl rounded-tl-md px-5 py-3 max-w-[75%]">
+              <p class="text-lg leading-relaxed text-ink-900">李叔叔好呀！今天北京天气不错，下午26度多云转晴，很适合到公园走走呢～</p>
+            </div>
+          </div>
+
+          <!-- 用户消息 -->
+          <div class="flex items-start gap-3 flex-row-reverse">
+            <img
+              src="https://api.dicebear.com/9.x/personas/svg?seed=LiUncle&backgroundColor=c5d4e8"
+              class="w-11 h-11 rounded-full flex-shrink-0 bg-cream-200"
+              alt="李叔叔"
+            />
+            <div class="bg-cream-200 rounded-2xl rounded-tr-md px-5 py-3 max-w-[75%]">
+              <p class="text-lg leading-relaxed text-ink-900">好的小雅，那我等会儿就下楼遛弯儿去。</p>
+            </div>
+          </div>
+
+          <!-- AI 消息 -->
+          <div class="flex items-start gap-3">
+            <img
+              src="https://api.dicebear.com/9.x/notionists/svg?seed=Xiaoya&backgroundColor=fde7c8"
+              class="w-11 h-11 rounded-full flex-shrink-0 bg-cream-100"
+              alt="小雅"
+            />
+            <div class="bg-cream-100 rounded-2xl rounded-tl-md px-5 py-3 max-w-[75%]">
+              <p class="text-lg leading-relaxed text-ink-900">好嘞～记得带上帽子防晒，慢慢走，注意脚下台阶哦！</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 输入区：药丸形 -->
+        <div class="flex-shrink-0 bg-white rounded-full shadow-card flex items-center gap-3 pl-5 pr-3 py-2">
+          <div class="flex items-center gap-2 text-ink-500 flex-shrink-0">
+            <i data-lucide="mic" style="width:24px;height:24px;"></i>
+            <span class="text-base">按住 说话</span>
+          </div>
+          <div class="w-px h-8 bg-cream-200"></div>
+          <div class="flex-1 flex justify-center">
+            <button class="w-14 h-14 rounded-full bg-gradient-to-br from-warm-500 to-warm-600 hover:scale-105 active:scale-95 transition-transform shadow-lg flex items-center justify-center text-white ring-4 ring-cream-100">
+              <i data-lucide="mic" style="width:26px;height:26px;"></i>
+            </button>
+          </div>
+          <div class="w-px h-8 bg-cream-200"></div>
+          <button class="flex items-center gap-2 text-ink-700 hover:text-warm-600 transition px-4 py-2 rounded-full flex-shrink-0">
+            <i data-lucide="keyboard" style="width:24px;height:24px;"></i>
+            <span class="text-base font-medium">键盘输入</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- ===== 右侧栏：功能与信息 ===== -->
+      <aside class="col-span-12 lg:col-span-3 min-h-0 h-full flex flex-col gap-3 overflow-hidden">
+
+        <!-- 卡片一：快捷服务 -->
+        <div class="flex-shrink-0 bg-white rounded-2xl shadow-card p-4">
+          <div class="flex items-center gap-2 mb-4">
+            <i data-lucide="zap" class="text-warm-500" style="width:24px;height:24px;"></i>
+            <h3 class="text-xl font-bold text-ink-900">快捷服务</h3>
+          </div>
+          <div class="grid grid-cols-3 gap-3">
+            <button class="flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-cream-50 border border-cream-100 transition">
+              <div class="w-12 h-12 rounded-xl bg-sky-100 flex items-center justify-center text-sky-600">
+                <i data-lucide="cloud-sun" style="width:26px;height:26px;"></i>
+              </div>
+              <span class="text-sm text-ink-900 font-medium">查询天气</span>
+            </button>
+            <button class="flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-cream-50 border border-cream-100 transition">
+              <div class="w-12 h-12 rounded-xl bg-rose-100 flex items-center justify-center text-rose-600">
+                <i data-lucide="newspaper" style="width:26px;height:26px;"></i>
+              </div>
+              <span class="text-sm text-ink-900 font-medium">新闻播报</span>
+            </button>
+            <button class="flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-cream-50 border border-cream-100 transition">
+              <div class="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600">
+                <i data-lucide="heart-pulse" style="width:26px;height:26px;"></i>
+              </div>
+              <span class="text-sm text-ink-900 font-medium">健康贴士</span>
+            </button>
+            <button class="flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-cream-50 border border-cream-100 transition">
+              <div class="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600">
+                <i data-lucide="calendar-days" style="width:26px;height:26px;"></i>
+              </div>
+              <span class="text-sm text-ink-900 font-medium">日历查询</span>
+            </button>
+            <button class="flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-cream-50 border border-cream-100 transition">
+              <div class="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center text-purple-600">
+                <i data-lucide="music" style="width:26px;height:26px;"></i>
+              </div>
+              <span class="text-sm text-ink-900 font-medium">音乐欣赏</span>
+            </button>
+            <button class="flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-cream-50 border border-cream-100 transition">
+              <div class="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center text-orange-600">
+                <i data-lucide="book-open" style="width:26px;height:26px;"></i>
+              </div>
+              <span class="text-sm text-ink-900 font-medium">成语大全</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 卡片二：今天天气 -->
+        <div class="flex-shrink-0 bg-gradient-to-br from-sky-50 to-cream-50 rounded-2xl shadow-card p-4">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+              <i data-lucide="map-pin" class="text-ink-500" style="width:20px;height:20px;"></i>
+              <span class="text-lg font-medium text-ink-700">北京市</span>
+            </div>
+            <span class="text-sm text-ink-500">今天 周五</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="flex items-baseline gap-1">
+                <span class="text-6xl font-black text-ink-900 leading-none">26</span>
+                <span class="text-2xl font-medium text-ink-700">°C</span>
+              </div>
+              <div class="text-lg text-ink-700 mt-2">多云转晴</div>
+              <div class="flex items-center gap-2 mt-2 text-sm text-ink-500">
+                <i data-lucide="wind" style="width:16px;height:16px;"></i>
+                <span>东南风 2级</span>
+              </div>
+              <div class="mt-2 inline-flex items-center gap-1.5 bg-emerald-100 text-emerald-700 text-sm font-medium rounded-full px-3 py-1">
+                <span class="w-2 h-2 bg-emerald-500 rounded-full"></span>
+                空气优 · 38
+              </div>
+            </div>
+            <div class="text-amber-400">
+              <i data-lucide="cloud-sun" style="width:88px;height:88px;stroke-width:1.5;"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- 卡片三：温馨提示 -->
+        <div class="flex-1 min-h-0 bg-gradient-to-br from-cream-100 to-cream-50 rounded-2xl shadow-card p-4 relative overflow-hidden">
+          <div class="flex items-center gap-2 mb-3">
+            <i data-lucide="megaphone" class="text-warm-500" style="width:24px;height:24px;"></i>
+            <h3 class="text-xl font-bold text-ink-900">温馨提示</h3>
+          </div>
+          <p class="text-base leading-relaxed text-ink-700 pr-12">
+            天气多变，注意增减衣物。记得按时喝水、按时吃药，闲暇时可以泡杯清茶，听听轻音乐～
+          </p>
+          <div class="absolute bottom-3 right-3 text-warm-500/70">
+            <i data-lucide="coffee" style="width:38px;height:38px;stroke-width:1.5;"></i>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <!-- ============ 底部提示 ============ -->
+    <footer class="flex-shrink-0 text-center">
+      <p class="text-xs text-ink-400">
+        温馨提示：本服务仅为情感陪伴和信息查询参考，如有身体不适，请及时就医。
+      </p>
+    </footer>
+
+  </div>
+
+  <script>
+    // 渲染所有 Lucide 图标
+    lucide.createIcons();
+  </script>
+</body>
+
+</html>

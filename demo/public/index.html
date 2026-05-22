@@ -4,146 +4,459 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>温心陪伴 - 数字人聊天助手</title>
-  <link rel="stylesheet" href="/static/styles.css">
+  <title>虚拟情感陪护 · 数字人陪伴您每一天</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            cream: { 50: '#FDF9F1', 100: '#FAF3E4', 200: '#F3E8CF', 300: '#E8D5A8' },
+            ink:   { 900: '#3D2E1F', 700: '#5C4A36', 500: '#8B7A65', 400: '#A89B86' },
+            warm:  { 500: '#E89B4C', 600: '#D87E2A' },
+            danger:{ 500: '#E5564E', 50: '#FCEBE9' },
+          },
+          fontFamily: { sans: ['"Noto Sans SC"', 'system-ui', 'sans-serif'] },
+          boxShadow: {
+            soft: '0 2px 12px rgba(170, 130, 80, 0.06)',
+            card: '0 4px 20px rgba(170, 130, 80, 0.08)',
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    /* ---------------- 基础 ---------------- */
+    html, body { font-family: 'Noto Sans SC', system-ui, sans-serif; height: 100%; overflow: hidden; }
+    html { font-size: 16px; }                  /* 1rem 基准；关怀模式时变大 */
+    body { background-color: #FDF9F1; color: #3D2E1F; font-size: 1.0625rem; }
+    [data-lucide] { width: 1.375rem; height: 1.375rem; stroke-width: 2; }
+    .nice-scroll::-webkit-scrollbar { width: 8px; }
+    .nice-scroll::-webkit-scrollbar-thumb { background: #E8D5A8; border-radius: 8px; }
+    .nice-scroll::-webkit-scrollbar-track { background: transparent; }
+
+    /* ---------------- 页面切换 ---------------- */
+    .page { display: none; }
+    .page.active { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+    /* ---------------- 聊天气泡 ---------------- */
+    .message { display: flex; align-items: flex-start; gap: 12px; }
+    .message::before {
+      content: ''; width: 44px; height: 44px; border-radius: 50%;
+      flex-shrink: 0; background-size: cover; background-position: center;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    }
+    .message-bot::before {
+      background-color: #FAF3E4;
+      background-image: url('https://api.dicebear.com/9.x/notionists/svg?seed=Xiaoya&backgroundColor=fde7c8');
+    }
+    .message-user { flex-direction: row-reverse; }
+    .message-user::before {
+      background-color: #F3E8CF;
+      background-image: url('https://api.dicebear.com/9.x/personas/svg?seed=LiUncle&backgroundColor=c5d4e8');
+    }
+    .bubble {
+      padding: 12px 20px; border-radius: 18px; max-width: 75%;
+      font-size: 1.0625rem; line-height: 1.55; color: #3D2E1F; word-break: break-word;
+    }
+    .message-bot .bubble { background: #FAF3E4; border-top-left-radius: 6px; }
+    .message-user .bubble { background: #F3E8CF; border-top-right-radius: 6px; }
+    .thinking-dots { color: #8B7A65; }
+    .thinking-dots::after {
+      content: ''; display: inline-block; width: 8px;
+      animation: thinkingDot 1.2s steps(4, end) infinite;
+    }
+    @keyframes thinkingDot { 0%{content:''} 25%{content:'.'} 50%{content:'..'} 75%{content:'...'} }
+
+    /* ---------------- 会话列表项 ---------------- */
+    .session-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 14px 14px; border-radius: 12px; cursor: pointer;
+      transition: all .15s; border: 1px solid transparent; margin-bottom: 2px;
+    }
+    .session-item:hover { background: #FDF9F1; border-color: #F3E8CF; }
+    .session-item.active { background: #FAF3E4; border-color: #E8D5A8; }
+    .session-content { flex: 1; min-width: 0; }
+    .session-time { font-size: 0.8125rem; color: #D87E2A; font-weight: 500; margin-bottom: 4px; }
+    .session-summary {
+      font-size: 1rem; color: #3D2E1F;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .session-delete-btn {
+      background: transparent; border: none; cursor: pointer;
+      font-size: 0.875rem; padding: 6px 8px; border-radius: 6px;
+      opacity: 0.4; transition: all .15s; color: #8B7A65;
+    }
+    .session-delete-btn:hover { opacity: 1; background: #FCEBE9; color: #E5564E; }
+
+    /* ---------------- 数字人 3D 容器 ---------------- */
+    .digital-human-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+    .digital-human-container canvas {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: contain;
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      margin: 0 auto;
+    }
+
+    /* ---------------- 视频区状态层 ---------------- */
+    #breathingLight {
+      position: absolute; inset: 0;
+      background: radial-gradient(circle at center, transparent, transparent);
+      opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 2;
+    }
+    #breathingLight.active { opacity: 1; }
+    #breathingLight.listening { background: radial-gradient(circle at center, rgba(232,155,76,0.18), transparent 65%); animation: breathePulse 2s ease-in-out infinite; }
+    #breathingLight.thinking  { background: radial-gradient(circle at center, rgba(99,179,237,0.18), transparent 65%); }
+    #breathingLight.speaking  { background: radial-gradient(circle at center, rgba(229,86,78,0.15), transparent 65%); animation: breathePulse 1.4s ease-in-out infinite; }
+    @keyframes breathePulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+    #avatarStatus {
+      position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.45); color: #fff; padding: 6px 14px;
+      border-radius: 9999px; font-size: 0.875rem; font-weight: 500;
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      z-index: 12; white-space: nowrap;
+    }
+
+    /* ---------------- 语音按钮 ---------------- */
+    .center-voice-btn.recording {
+      background: linear-gradient(135deg, #E5564E, #D43F3F) !important;
+      animation: recordingPulse 1s ease-in-out infinite;
+    }
+    .center-voice-btn.pressing { transform: scale(0.95); }
+    @keyframes recordingPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(229,86,78,0.5); }
+      50% { box-shadow: 0 0 0 14px rgba(229,86,78,0); }
+    }
+
+    /* ---------------- 关怀模式 ---------------- */
+    /* 通过抬高 html 根字号，让所有 rem 单位（含 Tailwind 的 text-*）一起放大 */
+    html.care-mode { font-size: 20px; }                    /* 默认 16px → 20px，约 +25% */
+    html.care-mode [data-lucide] { stroke-width: 2.2; }    /* 图标线条略粗，更清晰 */
+    body.care-mode #careModeToggle {
+      background: #E89B4C; color: #fff;
+      border-color: #E89B4C;
+    }
+    body.care-mode #careModeToggle [data-lucide] { color: #fff; }
+
+    /* ---------------- Toast ---------------- */
+    .toast-message {
+      position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+      padding: 12px 24px; border-radius: 9999px; background: #fff; color: #3D2E1F;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.15); z-index: 1000;
+      animation: toastIn 0.3s ease; font-size: 1rem; font-weight: 500;
+    }
+    .toast-message.warning { background: #FEF3C7; color: #92400E; }
+    .toast-message.error   { background: #FCEBE9; color: #B91C1C; }
+    @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translate(-50%, 0); } }
+    @keyframes fadeOutDown { from { opacity: 1; transform: translate(-50%, 0); } to { opacity: 0; transform: translate(-50%, 20px); } }
+
+    /* ---------------- 摄像头 PiP ---------------- */
+    #camera { width: 100%; height: 100%; object-fit: cover; background: #1a1a1a; }
+    .camera-hint:empty { display: none !important; }
+  </style>
 </head>
 
-<body>
+<body class="h-screen overflow-hidden">
 
-  <!-- 选择页面 -->
+  <!-- ============================================================
+       选择数字人页面
+       ============================================================ -->
   <div id="selectPage" class="page active">
-    <div class="select-container">
-      <div class="header-section">
-        <h1>温心陪伴</h1>
-        <p class="subtitle">选择您的陪伴朋友</p>
-      </div>
-      <div class="avatar-grid">
-        <div class="avatar-card" data-id="1">
-          <div class="avatar-image avatar-friend1">👧</div>
-          <h3>小丽</h3>
-          <p>贴心孙女 · 温柔陪伴</p>
-          <button class="select-btn" onclick="selectAvatar(1)">选择</button>
+    <div class="flex-1 flex items-center justify-center px-6">
+      <div class="max-w-4xl w-full">
+        <div class="text-center mb-10">
+          <div class="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-br from-warm-500 to-warm-600 flex items-center justify-center text-white mb-4 shadow-lg">
+            <i data-lucide="heart-handshake" style="width:44px;height:44px;"></i>
+          </div>
+          <h1 class="text-4xl font-bold text-ink-900">虚拟情感陪护</h1>
+          <p class="text-lg text-ink-500 mt-2">请选择您的陪伴朋友</p>
         </div>
-        <div class="avatar-card" data-id="2">
-          <div class="avatar-image avatar-friend2">👴</div>
-          <h3>老王</h3>
-          <p>同龄老友 · 唠嗑谈心</p>
-          <button class="select-btn" onclick="selectAvatar(2)">选择</button>
-        </div>
-        <div class="avatar-card" data-id="3">
-          <div class="avatar-image avatar-friend3">🧑</div>
-          <h3>小明</h3>
-          <p>年轻伙伴 · 活力陪聊</p>
-          <button class="select-btn" onclick="selectAvatar(3)">选择</button>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <button onclick="selectAvatar(1)" class="group bg-white rounded-3xl shadow-card p-6 hover:-translate-y-1 hover:shadow-lg transition text-center">
+            <img src="https://api.dicebear.com/9.x/notionists/svg?seed=Xiaoli&backgroundColor=fde7c8" class="w-28 h-28 mx-auto rounded-full mb-4 bg-cream-100" alt="小丽">
+            <h3 class="text-2xl font-bold text-ink-900">小丽</h3>
+            <p class="text-ink-500 mt-1">贴心孙女 · 温柔陪伴</p>
+            <div class="mt-4 inline-flex items-center gap-2 text-warm-600 font-medium">
+              选择她 <i data-lucide="arrow-right" style="width:18px;height:18px;"></i>
+            </div>
+          </button>
+          <button onclick="selectAvatar(2)" class="group bg-white rounded-3xl shadow-card p-6 hover:-translate-y-1 hover:shadow-lg transition text-center">
+            <img src="https://api.dicebear.com/9.x/personas/svg?seed=LaoWang&backgroundColor=d4e8d4" class="w-28 h-28 mx-auto rounded-full mb-4 bg-cream-100" alt="老王">
+            <h3 class="text-2xl font-bold text-ink-900">老王</h3>
+            <p class="text-ink-500 mt-1">同龄老友 · 唠嗑谈心</p>
+            <div class="mt-4 inline-flex items-center gap-2 text-warm-600 font-medium">
+              选择他 <i data-lucide="arrow-right" style="width:18px;height:18px;"></i>
+            </div>
+          </button>
+          <button onclick="selectAvatar(3)" class="group bg-white rounded-3xl shadow-card p-6 hover:-translate-y-1 hover:shadow-lg transition text-center">
+            <img src="https://api.dicebear.com/9.x/notionists/svg?seed=Xiaoming&backgroundColor=cce5ff" class="w-28 h-28 mx-auto rounded-full mb-4 bg-cream-100" alt="小明">
+            <h3 class="text-2xl font-bold text-ink-900">小明</h3>
+            <p class="text-ink-500 mt-1">年轻伙伴 · 活力陪聊</p>
+            <div class="mt-4 inline-flex items-center gap-2 text-warm-600 font-medium">
+              选择他 <i data-lucide="arrow-right" style="width:18px;height:18px;"></i>
+            </div>
+          </button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- 聊天页面 -->
+  <!-- ============================================================
+       聊天主页面（mockup 接入）
+       ============================================================ -->
   <div id="chatPage" class="page">
-    <div class="chat-layout">
+    <div class="w-full h-screen px-4 py-3 flex flex-col gap-3">
 
-      <!-- 左侧：数字人信息（小卡片样式） -->
-      <div class="left-section">
-        <div class="avatar-card small-card">
-          <div id="avatarContainer" class="avatar-image">👧</div>
-          <h3 id="botName"></h3>
-          <p id="botDesc"></p>
-        </div>
-        <!-- 关怀模式切换按钮 -->
-        <button id="careModeToggle" class="care-mode-btn" type="button" onclick="toggleCareMode()">
-          <span class="care-icon">👁️</span> 关怀模式
-        </button>
-        <button id="newSessionBtn" class="new-session-btn" type="button" onclick="newConversation()">
-          <span class="btn-icon">✨</span> 开启新对话
-        </button>
-        <div class="history-title">
-          <span>📋 历史会话</span>
-          <span class="session-count" id="sessionCount"></span>
-        </div>
-        <div id="sessionList" class="session-list">
-          <!-- 会话列表将在这里动态生成 -->
-        </div>
-        <!-- 用户称呼设置 -->
-        <div class="user-name-section">
-          <label for="userNameInput">👤 您的称呼</label>
-          <div class="name-input-wrapper">
-            <input type="text" id="userNameInput" placeholder="例如：王爷爷" maxlength="10">
-            <button class="save-name-btn" onclick="saveUserName()">保存</button>
+      <!-- 顶栏 -->
+      <header class="flex-shrink-0 flex items-center justify-between bg-white rounded-2xl shadow-soft px-6 py-3">
+        <div class="flex items-center gap-4">
+          <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-warm-500 to-warm-600 flex items-center justify-center text-white shadow-md">
+            <i data-lucide="heart-handshake" style="width:30px;height:30px;"></i>
           </div>
-          <p class="name-hint">设置后，数字人会记住您的名字哦</p>
-        </div>
-      </div>
-
-      <!-- 中间：数字人大区域 -->
-      <div class="center-section">
-        <div id="digitalHumanArea" class="digital-human-container">
-          <!-- 呼吸灯效果层 -->
-          <div id="breathingLight" class="breathing-light"></div>
-          <!-- 状态提示 -->
-          <div id="avatarStatus" class="avatar-status">
-            <span id="statusText">👋 在线</span>
+          <div>
+            <h1 class="text-2xl font-bold text-ink-900 leading-tight">虚拟情感陪护</h1>
+            <p class="text-sm text-ink-500 mt-0.5">数字人陪伴您每一天</p>
           </div>
         </div>
-        <!-- 按住说话按钮 -->
-        <button id="centerVoiceBtn" class="center-voice-btn" type="button" onmousedown="startVoiceRecording()"
-          onmouseup="stopVoiceRecording()" ontouchstart="startVoiceRecording()" ontouchend="stopVoiceRecording()">
-          <span class="voice-icon">🎙️</span> 按住说话
-        </button>
-      </div>
 
-      <!-- 右侧：右上角用户区 + 聊天记录 + 输入区 -->
-      <div class="right-section">
-        <!-- 顶部用户信息和时间问候 -->
-        <div class="top-user-area">
-          <div class="greeting-section">
-            <span id="timeGreeting" class="time-greeting">下午好</span>
-            <span id="userDisplayName" class="user-display-name">朋友</span>
+        <div class="flex items-center gap-4">
+          <div class="flex items-center gap-2 bg-cream-100 rounded-full px-5 py-2.5">
+            <span id="timeGreetingIcon" class="text-warm-500 inline-flex items-center">
+              <i data-lucide="sun" style="width:24px;height:24px;"></i>
+            </span>
+            <span id="timeGreeting" class="text-lg font-medium text-ink-900">下午好</span>
+            <span class="text-lg font-medium text-ink-900">，</span>
+            <span id="userDisplayName" class="text-lg font-medium text-ink-900">朋友</span>
           </div>
-          <video id="camera" class="camera-preview" autoplay muted playsinline></video>
-          <div class="camera-hint">📷 摄像头已开启（用于表情识别）</div>
+          <button id="careModeToggle" onclick="toggleCareMode()" class="flex items-center gap-2 border-2 border-cream-200 hover:border-warm-500 hover:bg-cream-50 transition rounded-full px-5 py-2.5 text-ink-700 font-medium">
+            <i data-lucide="eye"></i> 关怀模式
+          </button>
+          <button onclick="goBack()" class="flex items-center gap-2 border-2 border-danger-500 text-danger-500 hover:bg-danger-50 transition rounded-full px-5 py-2.5 font-medium">
+            <i data-lucide="log-out"></i> 退出
+          </button>
         </div>
+      </header>
 
-        <div class="chat-history-area">
-          <div id="messagesContainer" class="history-list"></div>
-        </div>
+      <!-- 主体三栏 -->
+      <main class="flex-1 min-h-0 grid grid-cols-12 gap-4">
 
-        <!-- 快捷短语区域 -->
-        <div class="quick-phrases">
-          <button class="phrase-btn" onclick="sendQuickPhrase('今天天气怎么样？')">
-            <span class="phrase-icon">☀️</span> 天气
-          </button>
-          <button class="phrase-btn" onclick="sendQuickPhrase('给我讲个笑话')">
-            <span class="phrase-icon">😊</span> 讲笑话
-          </button>
-          <button class="phrase-btn" onclick="sendQuickPhrase('唱首歌给我听')">
-            <span class="phrase-icon">🎵</span> 听歌
-          </button>
-          <button class="phrase-btn" onclick="sendQuickPhrase('我有点闷，陪我聊聊')">
-            <span class="phrase-icon">💬</span> 解闷
-          </button>
-          <button class="phrase-btn" onclick="sendQuickPhrase('给我讲个故事')">
-            <span class="phrase-icon">📖</span> 听故事
-          </button>
-          <button class="phrase-btn" onclick="sendQuickPhrase('今天有什么养生小知识？')">
-            <span class="phrase-icon">🌿</span> 养生
-          </button>
-        </div>
+        <!-- 左：历史 -->
+        <aside class="col-span-12 lg:col-span-3 min-h-0 h-full">
+          <div class="bg-white rounded-2xl shadow-card flex flex-col h-full">
+            <div class="flex items-center gap-2 px-5 py-4 border-b border-cream-100">
+              <i data-lucide="clock" class="text-warm-500" style="width:24px;height:24px;"></i>
+              <h2 class="text-xl font-bold text-ink-900">历史对话</h2>
+              <span id="sessionCount" class="ml-auto text-sm text-ink-500"></span>
+            </div>
 
-        <!-- 输入区域 -->
-        <div class="input-area">
-          <input type="text" id="messageInput" placeholder="输入内容...">
-          <button id="sendBtn">发送</button>
-        </div>
-      </div>
+            <div id="sessionList" class="flex-1 overflow-y-auto nice-scroll px-3 py-2">
+              <!-- session items 由 JS 动态生成 -->
+            </div>
+
+            <!-- 用户称呼 + 操作按钮 -->
+            <div class="px-4 py-3 border-t border-cream-100 space-y-3">
+              <div>
+                <label for="userNameInput" class="flex items-center gap-1.5 text-sm text-ink-700 font-medium mb-1.5">
+                  <i data-lucide="user-round" style="width:16px;height:16px;"></i> 您的称呼
+                </label>
+                <div class="flex gap-1.5">
+                  <input id="userNameInput" type="text" maxlength="10" placeholder="例如：李叔叔"
+                    class="flex-1 min-w-0 px-3 py-2 rounded-lg border-2 border-cream-200 focus:border-warm-500 outline-none text-sm">
+                  <button onclick="saveUserName()" class="px-3 py-2 bg-warm-500 hover:bg-warm-600 text-white rounded-lg text-sm font-medium whitespace-nowrap">保存</button>
+                </div>
+                <p class="text-xs text-ink-400 mt-1">数字人会记住您的名字哦</p>
+              </div>
+
+              <button onclick="newConversation()" type="button"
+                class="w-full py-2.5 bg-warm-500 hover:bg-warm-600 text-white rounded-xl font-medium text-sm flex items-center justify-center gap-1.5 transition">
+                <i data-lucide="plus-circle" style="width:18px;height:18px;"></i> 开启新对话
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        <!-- 中：核心交互 -->
+        <section class="col-span-12 lg:col-span-6 min-h-0 h-full flex flex-col gap-3">
+
+          <!-- 视频通话区 -->
+          <div class="relative flex-[3] min-h-0 rounded-3xl overflow-hidden shadow-card" style="background: url('/static/digital-human-bg.png') center/cover no-repeat, linear-gradient(135deg, #F3E8CF, #E8D5A8);">
+            <!-- TalkingHead 3D 渲染容器：JS 会清空内部并注入 wrapper / breathingLight / avatarStatus -->
+            <div id="digitalHumanArea" class="digital-human-container"></div>
+
+            <!-- 左上：数字人名牌 -->
+            <div class="absolute top-4 left-4 flex items-center gap-2 bg-emerald-500 text-white rounded-full px-4 py-2 shadow-lg z-10">
+              <span class="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+              <span class="font-medium">数字人 · <span id="botName">小雅</span></span>
+            </div>
+
+            <!-- 右上：用户摄像头 PiP -->
+            <div class="absolute top-4 right-4 flex items-start gap-3 z-10">
+              <div class="w-36 h-24 rounded-xl overflow-hidden shadow-lg border-2 border-white relative bg-ink-900">
+                <video id="camera" autoplay muted playsinline></video>
+                <div class="camera-hint absolute inset-0 flex items-center justify-center text-white text-xs pointer-events-none px-2 text-center" style="background: rgba(0,0,0,0.55);"></div>
+                <div class="absolute bottom-1 left-1 bg-black/60 text-white text-xs rounded px-1.5 py-0.5">您</div>
+              </div>
+            </div>
+
+            <!-- 左下：通话计时 -->
+            <div class="absolute bottom-4 left-4 flex items-center gap-2 bg-black/50 backdrop-blur text-white rounded-full px-4 py-2 z-10">
+              <span class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+              <span id="callTimer" class="font-medium tabular-nums">通话中　00:00:00</span>
+            </div>
+          </div>
+
+          <!-- 当前对话气泡区 -->
+          <div class="flex-[2] min-h-0 bg-white rounded-2xl shadow-card overflow-hidden flex flex-col">
+            <div class="chat-history-area flex-1 overflow-y-auto nice-scroll p-4">
+              <div id="messagesContainer" class="flex flex-col gap-3"></div>
+            </div>
+          </div>
+
+          <!-- 输入区：药丸形 -->
+          <div class="flex-shrink-0 bg-white rounded-full shadow-card flex items-center gap-3 pl-5 pr-3 py-2">
+            <div class="flex items-center gap-2 text-ink-500 flex-shrink-0">
+              <i data-lucide="mic" style="width:24px;height:24px;"></i>
+              <span id="voiceLabel" class="text-base whitespace-nowrap">按住 说话</span>
+            </div>
+            <div class="w-px h-8 bg-cream-200"></div>
+
+            <!-- 中央语音按钮：长按录音 -->
+            <div class="flex-1 flex justify-center">
+              <button id="centerVoiceBtn" type="button"
+                onmousedown="startVoiceRecording()" onmouseup="stopVoiceRecording()"
+                ontouchstart="startVoiceRecording()" ontouchend="stopVoiceRecording()"
+                class="center-voice-btn w-14 h-14 rounded-full bg-gradient-to-br from-warm-500 to-warm-600 hover:scale-105 active:scale-95 transition-transform shadow-lg flex items-center justify-center text-white ring-4 ring-cream-100">
+                <i data-lucide="mic" style="width:26px;height:26px;"></i>
+              </button>
+            </div>
+            <div class="w-px h-8 bg-cream-200"></div>
+
+            <!-- 键盘输入：展开输入框 -->
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <input id="messageInput" type="text" placeholder="或在此输入..."
+                class="w-44 px-4 py-2 rounded-full border-2 border-cream-200 focus:border-warm-500 outline-none text-base text-ink-900" />
+              <button id="sendBtn" class="px-5 py-2 bg-warm-500 hover:bg-warm-600 text-white rounded-full font-medium flex items-center gap-1.5">
+                <i data-lucide="send" style="width:18px;height:18px;"></i> 发送
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- 右：功能与信息 -->
+        <aside class="col-span-12 lg:col-span-3 min-h-0 h-full flex flex-col gap-3 overflow-hidden">
+
+          <!-- 快捷服务 -->
+          <div class="flex-shrink-0 bg-white rounded-2xl shadow-card p-4">
+            <div class="flex items-center gap-2 mb-3">
+              <i data-lucide="zap" class="text-warm-500" style="width:24px;height:24px;"></i>
+              <h3 class="text-xl font-bold text-ink-900">快捷服务</h3>
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+              <button onclick="sendQuickPhrase('今天天气怎么样？')" class="flex flex-col items-center gap-1.5 p-2 rounded-xl hover:bg-cream-50 border border-cream-100 transition">
+                <div class="w-11 h-11 rounded-xl bg-sky-100 flex items-center justify-center text-sky-600"><i data-lucide="cloud-sun" style="width:24px;height:24px;"></i></div>
+                <span class="text-sm text-ink-900 font-medium">查询天气</span>
+              </button>
+              <button onclick="sendQuickPhrase('给我讲个笑话')" class="flex flex-col items-center gap-1.5 p-2 rounded-xl hover:bg-cream-50 border border-cream-100 transition">
+                <div class="w-11 h-11 rounded-xl bg-yellow-100 flex items-center justify-center text-yellow-600"><i data-lucide="smile" style="width:24px;height:24px;"></i></div>
+                <span class="text-sm text-ink-900 font-medium">讲笑话</span>
+              </button>
+              <button onclick="sendQuickPhrase('今天有什么养生小知识？')" class="flex flex-col items-center gap-1.5 p-2 rounded-xl hover:bg-cream-50 border border-cream-100 transition">
+                <div class="w-11 h-11 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600"><i data-lucide="leaf" style="width:24px;height:24px;"></i></div>
+                <span class="text-sm text-ink-900 font-medium">养生</span>
+              </button>
+              <button onclick="sendQuickPhrase('给我讲个故事')" class="flex flex-col items-center gap-1.5 p-2 rounded-xl hover:bg-cream-50 border border-cream-100 transition">
+                <div class="w-11 h-11 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600"><i data-lucide="book-open" style="width:24px;height:24px;"></i></div>
+                <span class="text-sm text-ink-900 font-medium">听故事</span>
+              </button>
+              <button onclick="sendQuickPhrase('唱首歌给我听')" class="flex flex-col items-center gap-1.5 p-2 rounded-xl hover:bg-cream-50 border border-cream-100 transition">
+                <div class="w-11 h-11 rounded-xl bg-purple-100 flex items-center justify-center text-purple-600"><i data-lucide="music" style="width:24px;height:24px;"></i></div>
+                <span class="text-sm text-ink-900 font-medium">听歌</span>
+              </button>
+              <button onclick="sendQuickPhrase('我有点闷，陪我聊聊')" class="flex flex-col items-center gap-1.5 p-2 rounded-xl hover:bg-cream-50 border border-cream-100 transition">
+                <div class="w-11 h-11 rounded-xl bg-rose-100 flex items-center justify-center text-rose-600"><i data-lucide="message-circle" style="width:24px;height:24px;"></i></div>
+                <span class="text-sm text-ink-900 font-medium">解闷</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 天气卡（动态） -->
+          <div class="flex-shrink-0 bg-gradient-to-br from-sky-50 to-cream-50 rounded-2xl shadow-card p-4">
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <i data-lucide="map-pin" class="text-ink-500" style="width:18px;height:18px;"></i>
+                <span id="weatherCity" class="text-base font-medium text-ink-700">--</span>
+              </div>
+              <span class="text-sm text-ink-500" id="weatherDay">今天</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="flex items-baseline gap-1">
+                  <span id="weatherTemp" class="text-5xl font-black text-ink-900 leading-none">--</span>
+                  <span class="text-xl font-medium text-ink-700">°C</span>
+                </div>
+                <div id="weatherText" class="text-base text-ink-700 mt-1">加载中...</div>
+                <div class="flex items-center gap-2 mt-1.5 text-sm text-ink-500">
+                  <i data-lucide="wind" style="width:14px;height:14px;"></i>
+                  <span id="weatherWind">--</span>
+                </div>
+                <div id="weatherAqi" class="mt-1.5 hidden items-center gap-1.5 bg-emerald-100 text-emerald-700 text-xs font-medium rounded-full px-2.5 py-0.5">
+                  <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                  <span id="weatherAqiText">--</span>
+                </div>
+              </div>
+              <div id="weatherIcon" class="text-amber-400">
+                <i data-lucide="cloud-sun" style="width:72px;height:72px;stroke-width:1.5;"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- 温馨提示 -->
+          <div class="flex-1 min-h-0 bg-gradient-to-br from-cream-100 to-cream-50 rounded-2xl shadow-card p-4 relative overflow-hidden">
+            <div class="flex items-center gap-2 mb-2">
+              <i data-lucide="megaphone" class="text-warm-500" style="width:22px;height:22px;"></i>
+              <h3 class="text-lg font-bold text-ink-900">温馨提示</h3>
+            </div>
+            <p class="text-base leading-relaxed text-ink-700 pr-10">
+              天气多变，注意增减衣物。记得按时喝水、按时吃药，闲暇时可以泡杯清茶，听听轻音乐～
+            </p>
+            <div class="absolute bottom-3 right-3 text-warm-500/70">
+              <i data-lucide="coffee" style="width:36px;height:36px;stroke-width:1.5;"></i>
+            </div>
+          </div>
+        </aside>
+      </main>
+
+      <!-- 底部提示 -->
+      <footer class="flex-shrink-0 text-center">
+        <p class="text-xs text-ink-400">
+          温馨提示：本服务仅为情感陪伴和信息查询参考，如有身体不适，请及时就医。
+        </p>
+      </footer>
     </div>
-
-    <button class="back-btn" onclick="goBack()">
-      <span>←</span> 返回选择
-    </button>
   </div>
 
+  <!-- 隐藏的 JS 兼容钩子（保留旧 DOM 接口） -->
+  <div style="position:absolute;width:0;height:0;overflow:hidden;visibility:hidden;" aria-hidden="true">
+    <span id="botDesc"></span>
+    <span id="avatarContainer"></span>
+  </div>
+
+  <!-- ============================================================
+       脚本（保持现有 ES module 加载流程）
+       ============================================================ -->
   <script type="importmap">
   {
     "imports": {
@@ -153,7 +466,102 @@
     }
   }
   </script>
-  <script type="module" src="/static/script.js?v=11"></script>
+  <script type="module" src="/static/script.js?v=17"></script>
+
+  <script>
+    // ---- Lucide 初始化 + 全局回调 ----
+    function refreshIcons() { if (window.lucide) lucide.createIcons(); }
+    document.addEventListener('DOMContentLoaded', refreshIcons);
+
+    window.refreshIcons = refreshIcons;
+
+    // 通话计时器（视觉装饰，从页面加载开始计时）
+    (function () {
+      const t0 = Date.now();
+      setInterval(() => {
+        const el = document.getElementById('callTimer');
+        if (!el) return;
+        const s = Math.floor((Date.now() - t0) / 1000);
+        const hh = String(Math.floor(s / 3600)).padStart(2, '0');
+        const mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+        const ss = String(s % 60).padStart(2, '0');
+        el.textContent = `通话中　${hh}:${mm}:${ss}`;
+      }, 1000);
+    })();
+
+    // ---- 天气卡：从 /api/weather 取实时数据，10 分钟刷新一次 ----
+    function pickWeatherIcon(text) {
+      const t = text || '';
+      if (/雷/.test(t))          return 'cloud-lightning';
+      if (/雪/.test(t))          return 'cloud-snow';
+      if (/雨/.test(t))          return 'cloud-rain';
+      if (/雾|霾|沙/.test(t))    return 'cloud-fog';
+      if (/阴/.test(t))          return 'cloud';
+      if (/云/.test(t))          return 'cloud-sun';
+      if (/晴/.test(t))          return 'sun';
+      return 'cloud-sun';
+    }
+    function aqiColor(category) {
+      if (!category) return 'emerald';
+      if (category.includes('优')) return 'emerald';
+      if (category.includes('良')) return 'lime';
+      if (category.includes('轻度')) return 'amber';
+      if (category.includes('中度')) return 'orange';
+      return 'red';
+    }
+    async function refreshWeather() {
+      try {
+        const r = await fetch('/api/weather');
+        const d = await r.json();
+        if (!d || !d.ok) {
+          document.getElementById('weatherText').textContent = d?.error || '暂无天气数据';
+          return;
+        }
+        document.getElementById('weatherCity').textContent = d.city || '--';
+        document.getElementById('weatherTemp').textContent = d.temp ?? '--';
+        document.getElementById('weatherText').textContent = d.text || '';
+        // 风：优先 风向+级别，没有就显示 风速 m/s
+        let windText = '';
+        if (d.wind_dir || d.wind_scale) {
+          windText = `${d.wind_dir || ''} ${d.wind_scale ? d.wind_scale + '级' : ''}`.trim();
+        } else if (d.wind_speed != null) {
+          windText = `风速 ${d.wind_speed} 米/秒`;
+        }
+        document.getElementById('weatherWind').textContent = windText || '--';
+        // 图标按天气文本切换
+        const iconBox = document.getElementById('weatherIcon');
+        iconBox.innerHTML = `<i data-lucide="${pickWeatherIcon(d.text)}" style="width:72px;height:72px;stroke-width:1.5;"></i>`;
+        // 空气质量
+        const aqiBox = document.getElementById('weatherAqi');
+        if (d.aqi && d.aqi.category) {
+          aqiBox.classList.remove('hidden');
+          aqiBox.classList.add('inline-flex');
+          document.getElementById('weatherAqiText').textContent = `空气${d.aqi.category} · ${d.aqi.aqi}`;
+        } else {
+          aqiBox.classList.add('hidden');
+        }
+        refreshIcons();
+      } catch (e) {
+        console.warn('[weather] 获取失败', e);
+      }
+    }
+    // 启动后立即拉一次，10 分钟刷新一次
+    document.addEventListener('DOMContentLoaded', refreshWeather);
+    setInterval(refreshWeather, 600000);
+
+    // ---- 日历：每分钟更新一次右侧"今天 周X"小标 ----
+    async function refreshCalendar() {
+      try {
+        const r = await fetch('/api/calendar');
+        const d = await r.json();
+        if (!d || !d.ok) return;
+        const day = document.getElementById('weatherDay');
+        if (day) day.textContent = `今天 ${d.weekday}`;
+      } catch (e) { /* ignore */ }
+    }
+    document.addEventListener('DOMContentLoaded', refreshCalendar);
+    setInterval(refreshCalendar, 60000);
+  </script>
 </body>
 
 </html>
