@@ -39,6 +39,7 @@ from tts import tts_engine, TTSGenerationError
 
 from faceformer_adapter import audio_bytes_to_user_emotion
 from tools import get_weather, get_calendar
+import reminders as reminders_mod
 
 app = FastAPI()
 
@@ -62,6 +63,8 @@ PUNCTUATION_ONLY_PATTERN = re.compile(r'^[\s。，！？,.!?、；;：:~～…�
 
 # 清洗 LLM 偶尔泄露的工具标签和 markdown 标记
 _META_TAG_PATTERN = re.compile(r'【[^】]{0,30}】')          # 去掉 【实时天气】【念稿要求】等元标签
+_STAGE_DIRECTION_PATTERN = re.compile(r'（[^）]{1,40}）')   # 去掉 （语气转为关切）（轻声说）等中文括号旁白
+_STAGE_DIRECTION_ASCII_PATTERN = re.compile(r'\([^)\d]{2,40}\)')  # 去掉 (softly) (pause) 等英文小括号旁白；保留数字括号如 (30%)
 _MARKDOWN_BOLD_PATTERN = re.compile(r'\*{1,3}')             # ** 加粗
 _MARKDOWN_HEADING_PATTERN = re.compile(r'^#{1,6}\s*', re.MULTILINE)
 _MARKDOWN_CODE_PATTERN = re.compile(r'`{1,3}')
@@ -74,6 +77,8 @@ def sanitize_chunk(text: str) -> str:
     if not text:
         return ''
     text = _META_TAG_PATTERN.sub('', text)
+    text = _STAGE_DIRECTION_PATTERN.sub('', text)
+    text = _STAGE_DIRECTION_ASCII_PATTERN.sub('', text)
     text = _MARKDOWN_HEADING_PATTERN.sub('', text)
     text = _MARKDOWN_BOLD_PATTERN.sub('', text)
     text = _MARKDOWN_CODE_PATTERN.sub('', text)
@@ -302,12 +307,25 @@ def is_tts_speakable_text(text: str) -> bool:
     return PUNCTUATION_ONLY_PATTERN.fullmatch(stripped) is None
 
 
+def has_unclosed_bracket(text: str) -> bool:
+    """检查文本里是否存在尚未闭合的括号（中文/英文小括号）。
+    用于流式切分时避免把 LLM 偶尔输出的 `（语气舒缓，...）` 旁白切两半，
+    导致 sanitize_chunk 的整段括号正则匹配不到。"""
+    depth_cn = text.count('（') - text.count('）')
+    depth_en = text.count('(') - text.count(')')
+    return depth_cn > 0 or depth_en > 0
+
+
 def should_emit_chunk(buffer_text: str) -> bool:
     """判断 buffer 中是否有可以切出的 chunk"""
     stripped = (buffer_text or "").strip()
     if not stripped:
         return False
     if PUNCTUATION_ONLY_PATTERN.fullmatch(stripped):
+        return False
+    # 括号未闭合时禁止切分，等收齐 `）` 再说（防止旁白被切碎漏过清洗）
+    # 兜底：buffer 太长就算括号没闭合也强切，避免模型忘了闭合卡死整个流
+    if has_unclosed_bracket(stripped) and len(stripped) < MAX_CHUNK_LENGTH * 2:
         return False
     # 优先：句末标点（。！？!?）只要长度 >= MIN_SENTENCE_LENGTH 就可以分割
     if SENTENCE_END_PATTERN.search(stripped) and len(stripped) >= MIN_SENTENCE_LENGTH:
@@ -319,6 +337,17 @@ def should_emit_chunk(buffer_text: str) -> bool:
     return len(stripped) >= MAX_CHUNK_LENGTH
 
 
+def _is_inside_bracket(text: str, pos: int) -> bool:
+    """判断 text[pos] 是否落在尚未闭合的括号内（中文/英文小括号）。
+    用于切分时跳过括号内的标点，防止 `（语气舒缓，...）` 被从内部逗号处切两半。"""
+    prefix = text[:pos]
+    if prefix.count('（') > prefix.count('）'):
+        return True
+    if prefix.count('(') > prefix.count(')'):
+        return True
+    return False
+
+
 def split_next_chunk(buffer_text: str):
     """从 buffer 中切出一个 chunk，返回 (chunk, rest)"""
     working = buffer_text or ""
@@ -328,14 +357,14 @@ def split_next_chunk(buffer_text: str):
 
     # 策略1：优先在句末标点（。！？!?）处分割，找最靠前的满足最小长度的句末标点
     for m in SENTENCE_END_PATTERN.finditer(working):
-        if m.end() >= MIN_SENTENCE_LENGTH:
+        if m.end() >= MIN_SENTENCE_LENGTH and not _is_inside_bracket(working, m.start()):
             chunk = working[:m.end()].strip()
             rest = working[m.end():].lstrip()
             return chunk, rest
 
     # 策略2：在句中标点（，,等）处分割，遍历所有匹配找到位置 >= MIN_CHUNK_LENGTH 的
     for m in PUNCTUATION_PATTERN.finditer(working):
-        if m.end() >= MIN_CHUNK_LENGTH:
+        if m.end() >= MIN_CHUNK_LENGTH and not _is_inside_bracket(working, m.start()):
             chunk = working[:m.end()].strip()
             rest = working[m.end():].lstrip()
             return chunk, rest
@@ -367,6 +396,7 @@ async def process_user_message(
     response_state: ResponseState,
     is_current_response,
     preset_reply: str = None,
+    user_name: str = "",
 ):
     chunk_queue = asyncio.Queue()
     sentinel = object()
@@ -501,7 +531,7 @@ async def process_user_message(
                     response_state.interrupted = True
                     break
         else:
-            async for char in llm_chat(user_text, emotion, session_id):
+            async for char in llm_chat(user_text, emotion, session_id, user_name=user_name, avatar_id=avatar_id):
                 if not is_current_response(response_state.response_id):
                     response_state.interrupted = True
                     break
@@ -637,6 +667,7 @@ async def websocket_chat(websocket: WebSocket):
     current_emotion = "neutral"
     current_session_id = "default"
     current_avatar_id = 1
+    current_user_name = ""
     last_emotion_time = 0
     emotion_busy = False
 
@@ -676,6 +707,7 @@ async def websocket_chat(websocket: WebSocket):
                 current_state,
                 is_current_response,
                 preset_reply=preset_reply,
+                user_name=current_user_name,
             )
         )
 
@@ -687,6 +719,25 @@ async def websocket_chat(websocket: WebSocket):
         previous_state = active_response_state
         had_active_task = current_chat_task and not current_chat_task.done()
         preset_reply = None
+
+        # ── 提醒意图优先于一切（打断分类 / LLM）──
+        parsed = reminders_mod.try_parse_reminder(user_text)
+        print(f"[reminder] user_text={user_text!r}  parsed={parsed}")
+        if parsed:
+            when_dt, content = parsed
+            reminder = reminders_mod.add(when_dt, content)
+            print(f"[reminder] added id={reminder.id} when={reminder.when_ts} content={content!r}")
+            await safe_send(websocket, {
+                "type": "reminder_added",
+                "reminder": reminder.to_dict(),
+            })
+            ack = reminders_mod.build_ack_text(
+                reminders_mod.format_when(reminder.when_ts),
+                content,
+                current_user_name,
+            )
+            await start_chat_task(user_text, preset_reply=ack)
+            return
 
         if had_active_task and previous_state:
             predicted_response_id = current_response_id + 1
@@ -713,6 +764,26 @@ async def websocket_chat(websocket: WebSocket):
                 )
 
         await start_chat_task(user_text, preset_reply=preset_reply)
+
+    async def reminder_scanner():
+        """每 5 秒扫一次提醒，到期就推前端 + 让数字人主动播报"""
+        try:
+            while True:
+                await asyncio.sleep(5)
+                due = reminders_mod.pop_due()
+                for r in due:
+                    await safe_send(websocket, {
+                        "type": "reminder_fired",
+                        "reminder": r.to_dict(),
+                    })
+                    fire_text = reminders_mod.build_fire_text(r.content, current_user_name)
+                    await start_chat_task(f"[reminder:{r.id}]", preset_reply=fire_text)
+        except asyncio.CancelledError:
+            return
+
+    scanner_task = asyncio.create_task(reminder_scanner())
+    tasks.add(scanner_task)
+    scanner_task.add_done_callback(tasks.discard)
 
     try:
         while True:
@@ -755,6 +826,15 @@ async def websocket_chat(websocket: WebSocket):
 
                 if msg_type == "init":
                     current_avatar_id = payload.get("avatarId", 1)
+                    # 把后端内存里现有提醒推给前端（浏览器刷新后恢复列表）
+                    await safe_send(websocket, {
+                        "type": "reminder_list",
+                        "reminders": [r.to_dict() for r in reminders_mod.list_active()],
+                    })
+
+                incoming_name = (payload.get("userName") or "").strip()
+                if incoming_name:
+                    current_user_name = incoming_name
 
                 continue
 
@@ -805,6 +885,10 @@ async def websocket_chat(websocket: WebSocket):
                     "content",
                     payload.get("data", "")
                 ).strip()
+
+                incoming_name = (payload.get("userName") or "").strip()
+                if incoming_name:
+                    current_user_name = incoming_name
 
                 if user_text:
                     await handle_user_text(user_text)

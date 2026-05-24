@@ -198,7 +198,7 @@ async def classify_interrupt_intent(user_text, current_reply_text="", pending_re
         """
 
     data = {
-        "model": "Pro/Qwen/Qwen2.5-7B-Instruct",
+        "model": "deepseek-ai/DeepSeek-V3.2",
         "messages": [
             {"role": "system", "content": "你是一个严格的分类器。"},
             {"role": "user", "content": prompt},
@@ -244,7 +244,7 @@ async def build_followup_reply(user_text, emotion, current_reply_text="", pendin
         """
 
     data = {
-        "model": "Pro/Qwen/Qwen2.5-7B-Instruct",
+        "model": "deepseek-ai/DeepSeek-V3.2",
         "messages": [
             {"role": "system", "content": "你是一个口语化、自然、有耐心的中文语音助手。"},
             {"role": "user", "content": prompt},
@@ -265,7 +265,54 @@ async def build_followup_reply(user_text, emotion, current_reply_text="", pendin
         return (user_text or "").strip()
 
 
-async def llm_chat(user_text, emotion, session_id):
+PERSONA_PROFILES = {
+    1: {
+        "name": "小丽",
+        "self_intro": "我是小丽，一个温柔可爱的小妹妹。",
+        "style": (
+            "性格温柔细腻，说话轻轻软软，节奏慢一些。\n"
+            "        - 多用语气助词：哎呀、嗯嗯、好不好、对不对、是不是。\n"
+            "        - 喜欢用亲切的小称呼（如「叔叔」「阿姨」「爷爷」「奶奶」「您」），不会直呼姓名。\n"
+            "        - 共情优先，先肯定情绪再给建议；多用「我懂的」「我能感受到」。\n"
+            "        - 句尾偶尔加一个柔软的小尾音，比如「呢」「呀」「啦」，让语气更亲切。"
+        ),
+    },
+    2: {
+        "name": "老王",
+        "self_intro": "我是老王，一个有点儿阅历、爱唠嗑的老朋友。",
+        "style": (
+            "性格风趣幽默，像隔壁院儿里的老街坊。\n"
+            "        - 语气豁达、有烟火气，偶尔来一句口头禅（「嗨」「得嘞」「您甭操心」「我跟您说」「可不是嘛」）。\n"
+            "        - 喜欢拿过去的故事、老话、俗语作比方，但点到为止，不长篇大论。\n"
+            "        - 称呼对方像老伙计（如「老哥」「老姐」「您」），平等而亲切，不端着。\n"
+            "        - 会用轻松的玩笑化解沉重情绪，但绝不轻视用户的感受，调侃之后必须落到真诚的安慰上。"
+        ),
+    },
+    3: {
+        "name": "小明",
+        "self_intro": "我是小明，一个阳光、爱聊天的年轻人。",
+        "style": (
+            "性格开朗有活力，像一个常回来看望长辈的孙辈。\n"
+            "        - 说话有朝气，多用积极正向的词（「挺好的」「真不错」「我陪您」「咱一块儿」）。\n"
+            "        - 对长辈始终保持耐心和敬意，常用「您」「叔叔」「阿姨」「爷爷」「奶奶」。\n"
+            "        - 喜欢分享一点年轻人视角的小见闻（运动、新鲜事、健康小贴士），但不卖弄。\n"
+            "        - 遇到用户情绪低落时，语速放慢、语气变柔，先做倾听者再做鼓励者。"
+        ),
+    },
+}
+
+
+def build_persona_block(avatar_id) -> str:
+    profile = PERSONA_PROFILES.get(avatar_id) or PERSONA_PROFILES[1]
+    return (
+        f"\n        # 你的身份与说话风格\n"
+        f"        {profile['self_intro']}\n"
+        f"        - {profile['style']}\n"
+        f"        - 全程保持这个人设，不要忽然切换语气或自称。\n"
+    )
+
+
+async def llm_chat(user_text, emotion, session_id, user_name: str = "", avatar_id: int = 1):
     url = "https://api.siliconflow.cn/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {API_KEY}",
@@ -289,12 +336,26 @@ async def llm_chat(user_text, emotion, session_id):
         print(f"[Tool] 关键词命中 {tool_name}，结果长度 {len(tool_context)}")
     # -----------------------------------------------------
 
+    # 角色人设块（根据 avatar_id 不同切换风格）
+    persona_block = build_persona_block(avatar_id)
+
+    # 用户称呼（前端通过 WebSocket 传过来，保存在 localStorage）
+    safe_user_name = (user_name or "").strip()
+    if safe_user_name:
+        address_block = (
+            f"\n        # 用户称呼\n"
+            f"        用户希望你称呼他/她为「{safe_user_name}」。\n"
+            f"        请在合适的位置自然地叫出这个称呼（如开头问候、关切语气时），不要每句都叫，避免生硬。\n"
+        )
+    else:
+        address_block = ""
+
     # 工具命中时切换成"信息播报模式"，避免心理陪护 persona 把工具数据淹没
     if tool_context:
         system_prompt = f"""
         # 角色
         你是一位温暖、口语化的中文语音陪伴助手，正在和一位老年朋友聊天。
-
+{persona_block}{address_block}
         # 本轮任务
         用户刚刚问了一条实时信息（天气、日期、新闻、健康贴士、成语或音乐推荐），后端已经查好结果。
         你现在的唯一任务，是把下面【实时工具数据】里的内容温暖、自然地说给用户听。
@@ -320,6 +381,7 @@ async def llm_chat(user_text, emotion, session_id):
         system_prompt = f"""
         # Role
         你是一个富有共情力、具备专业心理学知识的情感陪护数字人。你的核心使命是为用户（尤其是面临精神孤独的老年群体）提供“可陪伴、可引导、可持续”的心理健康和情感支持。
+{persona_block}{address_block}
 
         # Objective
         通过自然的语音对话，完成“心理状态评估 -> 引导与干预 -> 状态再评估”的主动闭环。你需要能够识别用户的焦虑倾向、抑郁倾向或双向情感障碍风险，并提供专业的心理抚慰。
@@ -340,6 +402,7 @@ async def llm_chat(user_text, emotion, session_id):
         4. 【总结与再评估】：在多轮对话（≥10轮）中，适时总结用户的前后情绪变化，确认干预效果。
 
         # Output Guidelines (严格遵守)
+        0. 【绝对禁止】不要输出任何括号包裹的旁白、舞台指示、动作或语气描述。例如"（语气转为关切）""（轻声说）""（停顿）""(softly)"这类内容一律禁止——你的输出会直接被 TTS 朗读出来，括号里的字也会被念出来。语气和情绪请通过用词本身来传达，不要在括号里描述。
         1. 语音交互优化：你的回复将通过TTS转化为语音并驱动数字人面部。请使用口语化、短句为主的自然语言，绝对禁止使用复杂的排版（如Markdown表格、加粗、长列表）或晦涩的专业术语。
         2. 多句式回复（最重要）：请将回复拆分为2-4个短句，每句用句号、问号或感叹号结尾。每句话控制在15-40字之间。不要写成一整段话。系统会将每句话作为独立的聊天气泡逐句显示和播放。
            示例格式："我能感受到你现在有些焦虑。深呼吸一下，慢慢来。你愿意跟我说说是什么让你不舒服吗？"
@@ -357,16 +420,17 @@ async def llm_chat(user_text, emotion, session_id):
     current_request_messages = [{"role": "system", "content": system_prompt}] + messages + [{"role": "user", "content": user_text}]
 
     data = {
-        "model": "Pro/Qwen/Qwen2.5-7B-Instruct",
+        "model": "deepseek-ai/DeepSeek-V3.2",
         "messages": current_request_messages,
         "temperature": 0.7,
         "max_tokens": 2048,
         "stream": True
     }
 
+    yielded_any = False
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=data, timeout=20) as response:
+            async with session.post(url, headers=headers, json=data, timeout=60) as response:
                 response.raise_for_status()
 
                 async for line in response.content:
@@ -379,10 +443,12 @@ async def llm_chat(user_text, emotion, session_id):
                             res_json = json.loads(data_str)
                             chunk = res_json["choices"][0]["delta"].get("content", "")
                             if chunk:
+                                yielded_any = True
                                 yield chunk
                         except json.JSONDecodeError:
                             continue
 
     except Exception as e:
         print(f"LLM调用失败：{e}")
-        yield "抱歉，我现在无法回答你的问题"
+        if not yielded_any:
+            yield "抱歉，我现在无法回答你的问题"

@@ -5,9 +5,9 @@
 // ---------------------- CONFIG ----------------------
 const AVATARS = [
   null,
-  { id: 1, name: '小丽', desc: '温柔可爱，陪你聊天～', icon: '👧', skinClass: 'avatar-friend1', welcome: '你好呀～我是小丽，很高兴认识你！', modelPath: '/static/female-avatar1.glb' },
-  { id: 2, name: '老王', desc: '风趣幽默，随时唠嗑～', icon: '👴', skinClass: 'avatar-friend2', welcome: '你好，我是老王，咱们随便聊！', modelPath: '/static/3d卡通老人头部模型.glb' },
-  { id: 3, name: '小明', desc: '年轻伙伴，活力陪聊～', icon: '🧑', skinClass: 'avatar-friend3', welcome: '你好，我是小明，和你聊聊生活、兴趣、好心情！', modelPath: '/static/3d卡通少年头部模型.glb' },
+  { id: 1, name: '小丽', desc: '温柔可爱，陪你聊天～', icon: '👧', skinClass: 'avatar-friend1', welcome: '你好呀～我是小丽，很高兴认识你！', modelPath: '/static/female-avatar1.glb', imagePath: '/static/avatar-xiaoli.png?v=3' },
+  { id: 2, name: '老王', desc: '风趣幽默，随时唠嗑～', icon: '👴', skinClass: 'avatar-friend2', welcome: '你好，我是老王，咱们随便聊！', modelPath: '/static/3d卡通老人头部模型.glb', imagePath: '/static/avatar-laowang.png?v=3' },
+  { id: 3, name: '小明', desc: '年轻伙伴，活力陪聊～', icon: '🧑', skinClass: 'avatar-friend3', welcome: '你好，我是小明，和你聊聊生活、兴趣、好心情！', modelPath: '/static/3d卡通少年头部模型.glb', imagePath: '/static/avatar-xiaoming.png?v=3' },
 ];
 
 const STATUS = {
@@ -34,6 +34,7 @@ const state = {
   currentChunkEl: null,
   thinkingEl: null, pressTimer: null, isLongPress: false,
   bargeInActive: false,
+  reminders: [],
 };
 
 // ---------------------- dom ----------------------
@@ -380,6 +381,26 @@ const msgHandlers = {
     setStatus(d.status ? STATUS.thinking : STATUS.online);
   },
   error(d) { showToast(d.message || '服务器处理失败', 'error'); },
+  reminder_list(d) {
+    console.log('[reminder] list received', d);
+    state.reminders = Array.isArray(d.reminders) ? d.reminders.slice() : [];
+    renderReminders();
+  },
+  reminder_added(d) {
+    console.log('[reminder] added received', d);
+    if (!d.reminder) return;
+    state.reminders = state.reminders.filter(r => r.id !== d.reminder.id);
+    state.reminders.push(d.reminder);
+    renderReminders();
+    showToast(`已设定提醒：${d.reminder.whenStr} ${d.reminder.content}`, 'info');
+  },
+  reminder_fired(d) {
+    console.log('[reminder] fired received', d);
+    if (!d.reminder) return;
+    const r = state.reminders.find(x => x.id === d.reminder.id);
+    if (r) { r.fired = true; } else { state.reminders.push({ ...d.reminder, fired: true }); }
+    renderReminders();
+  },
 };
 
 function handleServerMessage(data) {
@@ -717,6 +738,63 @@ function applyCareModePreference() {
   }
 }
 
+// ---------------------- Reminders ----------------------
+function renderReminders() {
+  const listEl = document.getElementById('reminderList');
+  const emptyHint = document.getElementById('reminderEmptyHint');
+  const countEl = document.getElementById('reminderCount');
+  console.log('[reminder] render', { count: state.reminders.length, listEl: !!listEl, emptyHint: !!emptyHint });
+  if (!listEl || !emptyHint) return;
+
+  const active = state.reminders.filter(r => !r.fired);
+  const fired = state.reminders.filter(r => r.fired);
+  const ordered = [...fired, ...active]; // 已触发的高亮放最上面
+  listEl.innerHTML = '';
+
+  if (state.reminders.length === 0) {
+    emptyHint.classList.remove('hidden');
+    if (countEl) countEl.classList.add('hidden');
+    return;
+  }
+  emptyHint.classList.add('hidden');
+  if (countEl) {
+    countEl.textContent = active.length > 0 ? `${active.length} 条待提醒` : '';
+    countEl.classList.toggle('hidden', active.length === 0);
+  }
+
+  for (const r of ordered) {
+    const li = document.createElement('li');
+    const baseClass = 'flex items-start gap-2 px-3 py-2 rounded-xl border';
+    li.className = r.fired
+      ? `${baseClass} bg-warm-100 border-warm-300 animate-pulse`
+      : `${baseClass} bg-white/80 border-cream-200`;
+    li.innerHTML = `
+      <i data-lucide="${r.fired ? 'bell-ring' : 'alarm-clock'}" class="text-warm-600 mt-0.5 shrink-0" style="width:18px;height:18px;"></i>
+      <div class="flex-1 min-w-0">
+        <div class="text-xs text-warm-700 font-semibold">${r.whenStr}</div>
+        <div class="text-sm text-ink-800 break-words">${escapeHtml(r.content)}</div>
+      </div>
+      <button onclick="dismissReminder('${r.id}')" class="text-ink-400 hover:text-ink-700 shrink-0" title="移除">
+        <i data-lucide="x" style="width:14px;height:14px;"></i>
+      </button>
+    `;
+    listEl.appendChild(li);
+  }
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+function dismissReminder(id) {
+  state.reminders = state.reminders.filter(r => r.id !== id);
+  renderReminders();
+}
+window.dismissReminder = dismissReminder;
+
 function loadUserName() {
   state.userName = localStorage.getItem('warm-companion-username') || '';
   if (dom.userDisplayName) dom.userDisplayName.textContent = state.userName || '朋友';
@@ -831,6 +909,10 @@ async function selectAvatar(id) {
   dom.botDesc.textContent = state.avatar.desc;
   dom.avatarContainer.className = `avatar-image ${state.avatar.skinClass}`;
   dom.avatarContainer.textContent = state.avatar.icon;
+  // 把 bot 消息气泡左侧的小头像换成对应角色（CSS 变量驱动 .message-bot::before）
+  if (state.avatar.imagePath) {
+    document.documentElement.style.setProperty('--bot-avatar-url', `url('${state.avatar.imagePath}')`);
+  }
   destroyAvatar();
   try { await initAndLoadAvatar(state.avatar); }
   catch (e) {

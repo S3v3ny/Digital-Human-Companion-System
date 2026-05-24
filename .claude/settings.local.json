@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls \"D:\\\\数字人\" 2>&1 | head -30)",
+      "Read(//d/数字人/**)",
+      "PowerShell($paths = @\\('D:\\\\数字人\\\\老王.png','D:\\\\数字人\\\\小丽.png','D:\\\\数字人\\\\小明.png'\\); foreach \\($p in $paths\\) { if \\(Test-Path -LiteralPath $p\\) { $f = Get-Item -LiteralPath $p; Write-Output \\(\"FOUND  {0}  {1} bytes\" -f $f.FullName, $f.Length\\) } else { Write-Output \\(\"MISSING {0}\" -f $p\\) } })"
+    ]
+  }
+}

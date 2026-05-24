@@ -51,7 +51,7 @@
     }
     .message-bot::before {
       background-color: #FAF3E4;
-      background-image: url('https://api.dicebear.com/9.x/notionists/svg?seed=Xiaoya&backgroundColor=fde7c8');
+      background-image: var(--bot-avatar-url, url('/static/avatar-xiaoli.png?v=3'));
     }
     .message-user { flex-direction: row-reverse; }
     .message-user::before {
@@ -186,7 +186,7 @@
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
           <button onclick="selectAvatar(1)" class="group bg-white rounded-3xl shadow-card p-6 hover:-translate-y-1 hover:shadow-lg transition text-center">
-            <img src="https://api.dicebear.com/9.x/notionists/svg?seed=Xiaoli&backgroundColor=fde7c8" class="w-28 h-28 mx-auto rounded-full mb-4 bg-cream-100" alt="小丽">
+            <img src="/static/avatar-xiaoli.png?v=3" class="w-28 h-28 mx-auto rounded-full mb-4 bg-cream-100 object-cover" alt="小丽">
             <h3 class="text-2xl font-bold text-ink-900">小丽</h3>
             <p class="text-ink-500 mt-1">贴心孙女 · 温柔陪伴</p>
             <div class="mt-4 inline-flex items-center gap-2 text-warm-600 font-medium">
@@ -194,7 +194,7 @@
             </div>
           </button>
           <button onclick="selectAvatar(2)" class="group bg-white rounded-3xl shadow-card p-6 hover:-translate-y-1 hover:shadow-lg transition text-center">
-            <img src="https://api.dicebear.com/9.x/personas/svg?seed=LaoWang&backgroundColor=d4e8d4" class="w-28 h-28 mx-auto rounded-full mb-4 bg-cream-100" alt="老王">
+            <img src="/static/avatar-laowang.png?v=3" class="w-28 h-28 mx-auto rounded-full mb-4 bg-cream-100 object-cover" alt="老王">
             <h3 class="text-2xl font-bold text-ink-900">老王</h3>
             <p class="text-ink-500 mt-1">同龄老友 · 唠嗑谈心</p>
             <div class="mt-4 inline-flex items-center gap-2 text-warm-600 font-medium">
@@ -202,7 +202,7 @@
             </div>
           </button>
           <button onclick="selectAvatar(3)" class="group bg-white rounded-3xl shadow-card p-6 hover:-translate-y-1 hover:shadow-lg transition text-center">
-            <img src="https://api.dicebear.com/9.x/notionists/svg?seed=Xiaoming&backgroundColor=cce5ff" class="w-28 h-28 mx-auto rounded-full mb-4 bg-cream-100" alt="小明">
+            <img src="/static/avatar-xiaoming.png?v=3" class="w-28 h-28 mx-auto rounded-full mb-4 bg-cream-100 object-cover" alt="小明">
             <h3 class="text-2xl font-bold text-ink-900">小明</h3>
             <p class="text-ink-500 mt-1">年轻伙伴 · 活力陪聊</p>
             <div class="mt-4 inline-flex items-center gap-2 text-warm-600 font-medium">
@@ -397,7 +397,7 @@
             <div class="flex items-center justify-between mb-2">
               <div class="flex items-center gap-2">
                 <i data-lucide="map-pin" class="text-ink-500" style="width:18px;height:18px;"></i>
-                <span id="weatherCity" class="text-base font-medium text-ink-700">--</span>
+                <button id="weatherCity" type="button" onclick="changeWeatherCity()" class="text-base font-medium text-ink-700 hover:text-warm-600 underline-offset-4 hover:underline" title="点击切换城市">--</button>
               </div>
               <span class="text-sm text-ink-500" id="weatherDay">今天</span>
             </div>
@@ -423,18 +423,20 @@
             </div>
           </div>
 
-          <!-- 温馨提示 -->
-          <div class="flex-1 min-h-0 bg-gradient-to-br from-cream-100 to-cream-50 rounded-2xl shadow-card p-4 relative overflow-hidden">
+          <!-- 温馨提示 / 我的提醒 -->
+          <div class="flex-1 min-h-0 bg-gradient-to-br from-cream-100 to-cream-50 rounded-2xl shadow-card p-4 relative overflow-hidden flex flex-col">
             <div class="flex items-center gap-2 mb-2">
               <i data-lucide="megaphone" class="text-warm-500" style="width:22px;height:22px;"></i>
               <h3 class="text-lg font-bold text-ink-900">温馨提示</h3>
+              <span id="reminderCount" class="ml-auto text-xs text-warm-600 font-medium hidden"></span>
             </div>
-            <p class="text-base leading-relaxed text-ink-700 pr-10">
-              天气多变，注意增减衣物。记得按时喝水、按时吃药，闲暇时可以泡杯清茶，听听轻音乐～
+            <!-- 提醒列表：动态填充 -->
+            <ul id="reminderList" class="space-y-2 overflow-y-auto nice-scroll flex-1 min-h-0 pr-1"></ul>
+            <!-- 兜底文案（没有提醒时显示） -->
+            <p id="reminderEmptyHint" class="text-base leading-relaxed text-ink-700 pr-10">
+              天气多变，注意增减衣物。记得按时喝水、按时吃药。<br>
+              <span class="text-sm text-ink-500">想加个提醒？试试对我说「下午三点提醒我吃药」～</span>
             </p>
-            <div class="absolute bottom-3 right-3 text-warm-500/70">
-              <i data-lucide="coffee" style="width:36px;height:36px;stroke-width:1.5;"></i>
-            </div>
           </div>
         </aside>
       </main>
@@ -466,7 +468,7 @@
     }
   }
   </script>
-  <script type="module" src="/static/script.js?v=17"></script>
+  <script type="module" src="/static/script.js?v=19"></script>
 
   <script>
     // ---- Lucide 初始化 + 全局回调 ----
@@ -509,9 +511,99 @@
       if (category.includes('中度')) return 'orange';
       return 'red';
     }
+    const CITY_KEY = 'warm-companion-city';
+
+    // 中国主要城市经纬度（地级市级别，~60 个常见城市）
+    // 经纬度从地理中心取，做欧氏距离最近邻匹配 — 完全离线，不依赖外部 API
+    const CN_CITIES = [
+      ['北京', 39.90, 116.41], ['上海', 31.23, 121.47], ['广州', 23.13, 113.26],
+      ['深圳', 22.54, 114.06], ['杭州', 30.27, 120.15], ['南京', 32.06, 118.78],
+      ['武汉', 30.59, 114.31], ['成都', 30.66, 104.07], ['重庆', 29.56, 106.55],
+      ['西安', 34.34, 108.94], ['苏州', 31.30, 120.59], ['天津', 39.13, 117.20],
+      ['青岛', 36.07, 120.38], ['大连', 38.91, 121.61], ['厦门', 24.48, 118.09],
+      ['福州', 26.07, 119.30], ['长沙', 28.23, 112.94], ['合肥', 31.82, 117.23],
+      ['济南', 36.65, 117.13], ['郑州', 34.75, 113.66], ['沈阳', 41.81, 123.43],
+      ['长春', 43.82, 125.32], ['哈尔滨', 45.80, 126.54], ['昆明', 24.88, 102.83],
+      ['贵阳', 26.65, 106.63], ['南宁', 22.82, 108.37], ['海口', 20.04, 110.20],
+      ['太原', 37.87, 112.55], ['石家庄', 38.04, 114.51], ['兰州', 36.06, 103.83],
+      ['银川', 38.49, 106.23], ['西宁', 36.62, 101.78], ['乌鲁木齐', 43.83, 87.62],
+      ['拉萨', 29.65, 91.14], ['呼和浩特', 40.84, 111.75], ['南昌', 28.68, 115.86],
+      ['温州', 28.00, 120.65], ['宁波', 29.87, 121.55], ['无锡', 31.49, 120.31],
+      ['常州', 31.81, 119.97], ['佛山', 23.02, 113.12], ['东莞', 23.02, 113.75],
+      ['珠海', 22.27, 113.58], ['中山', 22.52, 113.39], ['泉州', 24.87, 118.68],
+      ['汕头', 23.35, 116.68], ['烟台', 37.46, 121.45], ['潍坊', 36.71, 119.16],
+      ['唐山', 39.63, 118.18], ['秦皇岛', 39.94, 119.60], ['保定', 38.87, 115.46],
+      ['洛阳', 34.62, 112.45], ['桂林', 25.27, 110.29], ['三亚', 18.25, 109.51],
+      ['大理', 25.69, 100.16], ['丽江', 26.85, 100.23], ['张家界', 29.12, 110.48],
+      ['绍兴', 30.00, 120.58], ['嘉兴', 30.75, 120.76], ['金华', 29.08, 119.65],
+      ['台州', 28.66, 121.42], ['湖州', 30.89, 120.09],
+    ];
+
+    function nearestCity(lat, lon) {
+      let best = null, bestDist = Infinity;
+      for (const [name, cLat, cLon] of CN_CITIES) {
+        const dLat = lat - cLat, dLon = lon - cLon;
+        const d = dLat * dLat + dLon * dLon; // 用平方距离，省去 sqrt
+        if (d < bestDist) { bestDist = d; best = name; }
+      }
+      return best;
+    }
+
+    // 浏览器地理定位 → 内置中国城市最近邻匹配（离线，不依赖外部反向编码 API）
+    async function detectCityByGeolocation() {
+      console.log('[weather] geolocation supported?', !!navigator.geolocation);
+      if (!navigator.geolocation) return null;
+      const pos = await new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          resolve,
+          (err) => { console.warn('[weather] geolocation 失败', err.code, err.message); resolve(null); },
+          { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 }
+        );
+      });
+      if (!pos) return null;
+      const { latitude, longitude } = pos.coords;
+      console.log('[weather] 拿到经纬度', latitude, longitude);
+      const city = nearestCity(latitude, longitude);
+      console.log('[weather] 最近匹配城市=', city);
+      return city;
+    }
+
+    async function resolveCity() {
+      const cached = localStorage.getItem(CITY_KEY);
+      if (cached) {
+        console.log('[weather] 使用缓存城市', cached);
+        return cached;
+      }
+      const detected = await detectCityByGeolocation();
+      if (detected) {
+        localStorage.setItem(CITY_KEY, detected);
+        // 立刻反映到 UI 上，避免"看起来没变化"
+        const cityEl = document.getElementById('weatherCity');
+        if (cityEl) cityEl.textContent = detected;
+        return detected;
+      }
+      console.warn('[weather] 未能自动定位，将使用后端默认城市；可点城市名手动设置');
+      return null;
+    }
+
+    window.changeWeatherCity = function () {
+      const cur = localStorage.getItem(CITY_KEY) || '';
+      const next = prompt('请输入城市名（如 北京 / 上海 / 杭州）：', cur);
+      if (next === null) return;
+      const trimmed = next.trim();
+      if (trimmed) {
+        localStorage.setItem(CITY_KEY, trimmed);
+      } else {
+        localStorage.removeItem(CITY_KEY);
+      }
+      refreshWeather();
+    };
+
     async function refreshWeather() {
       try {
-        const r = await fetch('/api/weather');
+        const city = await resolveCity();
+        const url = city ? `/api/weather?city=${encodeURIComponent(city)}` : '/api/weather';
+        const r = await fetch(url);
         const d = await r.json();
         if (!d || !d.ok) {
           document.getElementById('weatherText').textContent = d?.error || '暂无天气数据';

@@ -22,23 +22,26 @@ class TTSGenerationError(Exception):
 # style: mstts:express-as 情感风格（不支持该风格的声音会静默忽略）
 # rate / pitch: prosody 参数，相对值如 "+5%" 或 "-3%"
 ROLE_CONFIG = {
+    # 小丽（avatar_id=1）：温柔可爱小妹妹 — 用 Xiaoyi（年轻女声）+ gentle 风格 + 偏高音调
     "girl": {
-        "voice": "zh-CN-XiaoxiaoNeural",
-        "style": "friendly",
-        "rate": "+5%",
-        "pitch": "+2%",
+        "voice": "zh-CN-XiaoyiNeural",
+        "style": "gentle",
+        "rate": "+3%",
+        "pitch": "+6%",
     },
+    # 小明（avatar_id=3）：阳光活力年轻人 — Yunxi + cheerful 风格 + 略快略亮
     "boy": {
         "voice": "zh-CN-YunxiNeural",
-        "style": "chat",
-        "rate": "0%",
-        "pitch": "0%",
+        "style": "cheerful",
+        "rate": "+3%",
+        "pitch": "+3%",
     },
+    # 老王（avatar_id=2）：有阅历的老朋友 — Yunze + 纪录片旁白风格 + 慢且低
     "elderly": {
         "voice": "zh-CN-YunzeNeural",
-        "style": "calm",
-        "rate": "-5%",
-        "pitch": "-3%",
+        "style": "documentary-narration",
+        "rate": "-8%",
+        "pitch": "-8%",
     },
 }
 
