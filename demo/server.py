@@ -33,6 +33,7 @@ from llm import (
     classify_interrupt_intent,
     build_followup_reply,
 )
+from user_profile import record_turn, delete_profile
 from asr import asr_engine  # 此时 asr.py 内部已改为加载 whisper-final-model
 from emotion import get_face_emotion
 from tts import tts_engine, TTSGenerationError
@@ -397,6 +398,7 @@ async def process_user_message(
     is_current_response,
     preset_reply: str = None,
     user_name: str = "",
+    user_id: str = "",
 ):
     chunk_queue = asyncio.Queue()
     sentinel = object()
@@ -531,7 +533,7 @@ async def process_user_message(
                     response_state.interrupted = True
                     break
         else:
-            async for char in llm_chat(user_text, emotion, session_id, user_name=user_name, avatar_id=avatar_id):
+            async for char in llm_chat(user_text, emotion, session_id, user_name=user_name, avatar_id=avatar_id, user_id=user_id):
                 if not is_current_response(response_state.response_id):
                     response_state.interrupted = True
                     break
@@ -569,6 +571,7 @@ async def process_user_message(
         if is_current_response(response_state.response_id) and not response_state.interrupted:
             response_state.completed = True
             await commit_assistant_message(session_id, response_state.full_text)
+            asyncio.create_task(record_turn(user_id or session_id, user_text, response_state.full_text))
 
     except asyncio.CancelledError:
         response_state.interrupted = True
@@ -668,6 +671,7 @@ async def websocket_chat(websocket: WebSocket):
     current_session_id = "default"
     current_avatar_id = 1
     current_user_name = ""
+    current_user_id = ""
     last_emotion_time = 0
     emotion_busy = False
 
@@ -708,6 +712,7 @@ async def websocket_chat(websocket: WebSocket):
                 is_current_response,
                 preset_reply=preset_reply,
                 user_name=current_user_name,
+                user_id=current_user_id,
             )
         )
 
@@ -818,15 +823,27 @@ async def websocket_chat(websocket: WebSocket):
                 continue
 
             # -------------------------
+            # 用户画像删除
+            # -------------------------
+            if msg_type == "delete_user":
+                uid = (payload.get("userId") or "").strip()
+                if uid:
+                    await delete_profile(uid)
+                continue
+
+            # -------------------------
             # 会话管理
             # -------------------------
             if msg_type in ["init", "new_session", "switch_session"]:
 
                 current_session_id = payload.get("sessionId", "default")
 
+                incoming_uid = (payload.get("userId") or "").strip()
+                if incoming_uid:
+                    current_user_id = incoming_uid
+
                 if msg_type == "init":
                     current_avatar_id = payload.get("avatarId", 1)
-                    # 把后端内存里现有提醒推给前端（浏览器刷新后恢复列表）
                     await safe_send(websocket, {
                         "type": "reminder_list",
                         "reminders": [r.to_dict() for r in reminders_mod.list_active()],
@@ -889,6 +906,10 @@ async def websocket_chat(websocket: WebSocket):
                 incoming_name = (payload.get("userName") or "").strip()
                 if incoming_name:
                     current_user_name = incoming_name
+
+                incoming_uid = (payload.get("userId") or "").strip()
+                if incoming_uid:
+                    current_user_id = incoming_uid
 
                 if user_text:
                     await handle_user_text(user_text)
