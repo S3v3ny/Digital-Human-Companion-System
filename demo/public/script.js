@@ -28,6 +28,7 @@ const MAX_RECONNECT = 5;
 // ---------------------- state ----------------------
 const state = {
   avatar: null, sessionId: null, sessions: [], userName: '',
+  userId: '',   // 当前用户的稳定 ID（由前端生成，永久保存在 localStorage）
   ws: null, wsConnected: false, reconnects: 0,
   recording: false, recognition: null,
   responseId: null, botChunks: [],
@@ -410,6 +411,11 @@ function handleServerMessage(data) {
 }
 
 function connectWebSocket() {
+  // 已在连接中或已连接时跳过，防止重复建立连接
+  if (state.ws && (state.ws.readyState === WebSocket.CONNECTING || state.ws.readyState === WebSocket.OPEN)) {
+    return;
+  }
+
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   state.ws = new WebSocket(`${protocol}//${location.host}/ws/chat`);
 
@@ -417,8 +423,9 @@ function connectWebSocket() {
     state.wsConnected = true;
     state.reconnects = 0;
     setStatus(STATUS.online);
+    // 只有已选择头像（在聊天页）才发 init，选头像页静默保活
     if (state.avatar) {
-      wsSend({ type: 'init', avatarId: state.avatar.id, avatarName: state.avatar.name, sessionId: state.sessionId, userName: state.userName });
+      wsSend({ type: 'init', avatarId: state.avatar.id, avatarName: state.avatar.name, sessionId: state.sessionId, userName: state.userName, userId: state.userId });
     }
   };
   state.ws.onmessage = (e) => {
@@ -432,7 +439,8 @@ function connectWebSocket() {
       state.reconnects++;
       setStatus(STATUS.reconnect);
       setTimeout(connectWebSocket, Math.min(1000 * Math.pow(2, state.reconnects), 10000));
-    } else {
+    } else if (state.avatar) {
+      // 只在聊天页才提示连接失败，选头像页静默重试
       showToast('无法连接到服务器，请刷新页面重试', 'error');
     }
   };
@@ -641,14 +649,14 @@ function newConversation() {
   addHistory('bot', welcome);
   addMsgToSession('bot', welcome);
   setStatus(STATUS.speaking);
-  wsSend({ type: 'new_session', sessionId: state.sessionId });
+  wsSend({ type: 'new_session', sessionId: state.sessionId, userName: state.userName, userId: state.userId });
 }
 
 function selectSession(sessionId) {
   state.sessionId = sessionId;
   renderSessionList();
   loadSessionMessages(sessionId);
-  wsSend({ type: 'switch_session', sessionId: state.sessionId });
+  wsSend({ type: 'switch_session', sessionId: state.sessionId, userName: state.userName, userId: state.userId });
 }
 
 function loadSessionMessages(sessionId) {
@@ -706,7 +714,7 @@ function sendMessage() {
   if (!state.bargeInActive) AudioPlayer.reset();
   state.bargeInActive = false;
   if (state.ws && state.ws.readyState === WebSocket.OPEN) {
-    wsSend({ type: 'message', content: text, sessionId: state.sessionId, timestamp: Date.now(), userName: state.userName });
+    wsSend({ type: 'message', content: text, sessionId: state.sessionId, timestamp: Date.now(), userName: state.userName, userId: state.userId });
   } else {
     showThinking(false);
     setStatus(STATUS.online);
@@ -795,26 +803,208 @@ function dismissReminder(id) {
 }
 window.dismissReminder = dismissReminder;
 
-function loadUserName() {
-  state.userName = localStorage.getItem('warm-companion-username') || '';
-  if (dom.userDisplayName) dom.userDisplayName.textContent = state.userName || '朋友';
-  const input = document.getElementById('userNameInput');
-  if (input && state.userName) input.value = state.userName;
+// =====================================================================
+// 用户系统（本地多用户，画像跨对话持久化）
+// =====================================================================
+const USERS_KEY    = 'warm-companion-users';
+const CUR_USER_KEY = 'warm-companion-current-user';
+
+function loadUsers() {
+  try { return JSON.parse(localStorage.getItem(USERS_KEY) || '[]'); }
+  catch (_) { return []; }
 }
 
-function saveUserName() {
-  const input = document.getElementById('userNameInput');
-  const name = input.value.trim();
-  if (name) {
-    state.userName = name;
-    localStorage.setItem('warm-companion-username', name);
-    if (dom.userDisplayName) dom.userDisplayName.textContent = name;
-    showToast(`好的，${name}，我会记住您的名字！`, 'info');
-    input.value = name;
-  } else {
-    showToast('请输入您的称呼', 'warning');
-  }
+function saveUsers(users) {
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
 }
+
+function getCurrentUser() {
+  const id = localStorage.getItem(CUR_USER_KEY);
+  return loadUsers().find(u => u.id === id) || null;
+}
+
+function _applyUser(user) {
+  if (!user) return;
+  state.userId   = user.id;
+  state.userName = user.name;
+  localStorage.setItem(CUR_USER_KEY, user.id);
+
+  // 顶栏问候
+  if (dom.userDisplayName) dom.userDisplayName.textContent = user.name;
+
+  // 侧边栏
+  const nameEl   = document.getElementById('currentUserDisplay');
+  const avatarEl = document.getElementById('currentUserAvatar');
+  if (nameEl)   nameEl.textContent   = user.name;
+  if (avatarEl) avatarEl.textContent = user.name.charAt(0);
+}
+
+function selectUser(userId) {
+  const users = loadUsers();
+  const user  = users.find(u => u.id === userId);
+  if (!user) return;
+  // 更新 lastActiveAt
+  user.lastActiveAt = Date.now();
+  saveUsers(users);
+  _applyUser(user);
+  renderSelectPageUserBar();
+  renderUserModalList();
+  hideUserModal();
+}
+
+function confirmNewUser() {
+  const input = document.getElementById('newUserNameInput');
+  const name  = (input ? input.value : '').trim();
+  if (!name) { showToast('请输入名字', 'warning'); return; }
+
+  const users  = loadUsers();
+  const exists = users.find(u => u.name === name);
+  if (exists) { selectUser(exists.id); if (input) input.value = ''; return; }
+
+  const newUser = { id: String(Date.now()), name, createdAt: Date.now(), lastActiveAt: Date.now() };
+  users.push(newUser);
+  saveUsers(users);
+  if (input) input.value = '';
+  _applyUser(newUser);
+  renderSelectPageUserBar();
+  renderUserModalList();
+  hideUserModal();
+  showToast(`欢迎，${name}！个人记忆已为您开启`, 'info');
+}
+
+window.deleteUser = function(userId) {
+  const users = loadUsers();
+  const user  = users.find(u => u.id === userId);
+  if (!user) return;
+  if (!confirm(`确定删除用户「${user.name}」及其所有记忆记录吗？`)) return;
+  const newUsers = users.filter(u => u.id !== userId);
+  saveUsers(newUsers);
+  // 通知后端删除服务器端画像
+  wsSend({ type: 'delete_user', userId });
+  if (state.userId === userId) {
+    if (newUsers.length > 0) {
+      _applyUser(newUsers[0]);
+    } else {
+      state.userId   = '';
+      state.userName = '';
+      localStorage.removeItem(CUR_USER_KEY);
+      if (dom.userDisplayName) dom.userDisplayName.textContent = '朋友';
+      const nameEl   = document.getElementById('currentUserDisplay');
+      const avatarEl = document.getElementById('currentUserAvatar');
+      if (nameEl)   nameEl.textContent   = '未选择用户';
+      if (avatarEl) avatarEl.textContent = '?';
+    }
+  }
+  renderSelectPageUserBar();
+  renderUserModalList();
+};
+
+function renderSelectPageUserBar() {
+  const bar = document.getElementById('selectPageUserBar');
+  if (!bar) return;
+  bar.innerHTML = '';
+  const users = loadUsers();
+
+  if (users.length === 0) {
+    bar.innerHTML = `
+      <div class="text-center w-full">
+        <p class="text-ink-500 text-sm mb-2">首次使用，请先告诉我您的名字</p>
+        <button onclick="showUserModal()"
+          class="px-6 py-2.5 bg-warm-500 hover:bg-warm-600 text-white rounded-full font-medium shadow-md transition">
+          创建我的账号
+        </button>
+      </div>`;
+    if (window.lucide) window.lucide.createIcons();
+    return;
+  }
+
+  users.sort((a, b) => (b.lastActiveAt || 0) - (a.lastActiveAt || 0)).forEach(u => {
+    const btn = document.createElement('button');
+    btn.className = 'user-chip ' + (u.id === state.userId ? 'selected' : 'unselected');
+    btn.textContent = u.name;
+    btn.onclick = () => selectUser(u.id);
+    bar.appendChild(btn);
+  });
+
+  const addBtn = document.createElement('button');
+  addBtn.className = 'user-chip add-btn';
+  addBtn.textContent = '＋ 新用户';
+  addBtn.onclick = showUserModal;
+  bar.appendChild(addBtn);
+}
+
+function renderUserModalList() {
+  const listEl = document.getElementById('userModalList');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+  const users = loadUsers();
+  if (users.length === 0) {
+    listEl.innerHTML = '<p class="text-sm text-ink-400 text-center py-3">还没有用户，请在下方创建</p>';
+    return;
+  }
+  users.sort((a, b) => (b.lastActiveAt || 0) - (a.lastActiveAt || 0)).forEach(u => {
+    const isActive = u.id === state.userId;
+    const div = document.createElement('div');
+    div.className = 'user-list-item' + (isActive ? ' active' : '');
+    div.innerHTML = `
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-sm
+          ${isActive ? 'bg-warm-500 text-white' : 'bg-cream-200 text-ink-700'}">
+          ${escapeHtml(u.name.charAt(0))}
+        </div>
+        <div class="min-w-0">
+          <div class="font-medium text-ink-900 text-sm truncate">${escapeHtml(u.name)}</div>
+          ${isActive ? '<div class="text-xs text-warm-600">当前用户</div>' : ''}
+        </div>
+      </div>
+      <div class="flex items-center gap-1.5 flex-shrink-0">
+        ${!isActive ? `<button onclick="selectUser('${u.id}')"
+          class="text-xs px-3 py-1.5 bg-warm-500 hover:bg-warm-600 text-white rounded-lg font-medium transition">选择</button>` : ''}
+        <button onclick="deleteUser('${u.id}')"
+          class="text-xs px-2.5 py-1.5 text-danger-500 hover:bg-danger-50 rounded-lg transition">删除</button>
+      </div>`;
+    listEl.appendChild(div);
+  });
+}
+
+function showUserModal() {
+  const modal = document.getElementById('userModal');
+  if (modal) { modal.classList.add('active'); renderUserModalList(); }
+  if (window.lucide) window.lucide.createIcons();
+  setTimeout(() => {
+    const inp = document.getElementById('newUserNameInput');
+    if (inp) inp.focus();
+  }, 100);
+}
+
+function hideUserModal() {
+  const modal = document.getElementById('userModal');
+  if (modal) modal.classList.remove('active');
+}
+
+function initUserSystem() {
+  const users  = loadUsers();
+  const curId  = localStorage.getItem(CUR_USER_KEY);
+  const oldName = localStorage.getItem('warm-companion-username');
+
+  // 迁移旧版单用户名字到新用户系统
+  if (users.length === 0 && oldName) {
+    const migrated = { id: String(Date.now()), name: oldName, createdAt: Date.now(), lastActiveAt: Date.now() };
+    saveUsers([migrated]);
+    _applyUser(migrated);
+  } else {
+    const cur = users.find(u => u.id === curId) || (users.length > 0 ? users[0] : null);
+    if (cur) _applyUser(cur);
+  }
+
+  renderSelectPageUserBar();
+}
+
+// =====================================================================
+// (旧函数保留为空 stub，防止 HTML 里已有 onclick 报错)
+// =====================================================================
+function loadUserName() { /* replaced by initUserSystem */ }
+function saveUserName() { showToast('请在"切换"按钮里修改用户', 'info'); }
 
 function updateTimeGreeting() {
   const info = getGreetingInfo();
@@ -904,6 +1094,11 @@ function stopVoiceRecording() {
 
 // ---------------------- Page Navigation ----------------------
 async function selectAvatar(id) {
+  if (!state.userId) {
+    showUserModal();
+    showToast('请先选择或创建您的用户', 'warning');
+    return;
+  }
   state.avatar = AVATARS[id];
   dom.botName.textContent = state.avatar.name;
   dom.botDesc.textContent = state.avatar.desc;
@@ -936,14 +1131,21 @@ async function selectAvatar(id) {
     renderSessionList();
     loadSessionMessages(state.sessionId);
   }
-  connectWebSocket();
+  // 选头像页已建立连接时直接发 init，否则新建连接（onopen 会发）
+  if (state.wsConnected) {
+    wsSend({ type: 'init', avatarId: state.avatar.id, avatarName: state.avatar.name, sessionId: state.sessionId, userName: state.userName, userId: state.userId });
+  } else {
+    connectWebSocket();
+  }
   Camera.init();
   dom.messageInput.focus();
   setStatus(STATUS.online);
 }
 
 function goBack() {
-  state.reconnects = MAX_RECONNECT;
+  // 先清头像，再关闭连接；onclose 重连时 state.avatar===null 不会发 init
+  state.avatar = null;
+  state.reconnects = 0; // 允许在选头像页继续保活
   if (state.ws) state.ws.close();
   AudioPlayer.reset();
   resetBotBubbleState();
@@ -951,7 +1153,6 @@ function goBack() {
   dom.chatPage.classList.remove('active');
   dom.selectPage.classList.add('active');
   destroyAvatar();
-  state.avatar = null;
   dom.messagesContainer.innerHTML = '';
 }
 
@@ -959,11 +1160,12 @@ function goBack() {
 window.addEventListener('DOMContentLoaded', () => {
   cacheDom();
   applyCareModePreference();
-  loadUserName();
+  initUserSystem();
   updateTimeGreeting();
   setInterval(updateTimeGreeting, 60000);
   initVoiceRecognition();
   initSessionListEvents();
+  connectWebSocket(); // 页面加载即建立连接，选头像页同样保活
 
   dom.sendBtn.addEventListener('click', sendMessage);
   dom.messageInput.addEventListener('keydown', e => {
@@ -980,3 +1182,8 @@ window.toggleCareMode = toggleCareMode;
 window.saveUserName = saveUserName;
 window.startVoiceRecording = startVoiceRecording;
 window.stopVoiceRecording = stopVoiceRecording;
+// 用户系统
+window.showUserModal = showUserModal;
+window.hideUserModal = hideUserModal;
+window.selectUser = selectUser;
+window.confirmNewUser = confirmNewUser;
