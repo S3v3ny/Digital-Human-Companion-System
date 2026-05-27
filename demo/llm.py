@@ -14,6 +14,7 @@ load_dotenv()  # 这一行必须在 os.getenv 之前执行
 API_KEY = os.getenv("API_KEY")
 
 from tools import detect_tool, call_tool
+from user_profile import build_profile_context, set_preferred_name
 
 
 MEMORY_FILE = Path(__file__).resolve().parent / "session_memory.json"
@@ -312,7 +313,7 @@ def build_persona_block(avatar_id) -> str:
     )
 
 
-async def llm_chat(user_text, emotion, session_id, user_name: str = "", avatar_id: int = 1):
+async def llm_chat(user_text, emotion, session_id, user_name: str = "", avatar_id: int = 1, user_id: str = ""):
     url = "https://api.siliconflow.cn/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {API_KEY}",
@@ -322,6 +323,17 @@ async def llm_chat(user_text, emotion, session_id, user_name: str = "", avatar_i
     async with memory_lock:
         normalized_session_id, messages = get_session_messages(session_id)
         messages = list(messages)
+
+    # 以 user_id 为画像主键，无 user_id 时回退到 session_id
+    profile_key = (user_id or "").strip() or normalized_session_id
+
+    # 更新用户画像中的称呼偏好
+    safe_user_name = (user_name or "").strip()
+    if safe_user_name:
+        await set_preferred_name(profile_key, safe_user_name)
+
+    # 获取当前用户画像注入块
+    profile_block = build_profile_context(profile_key)
 
     # --- 【4. 触发检索获取权威知识】 ---
     # 每次用户说话，先去数据库找最相关的 2 条心理学干预策略
@@ -339,8 +351,7 @@ async def llm_chat(user_text, emotion, session_id, user_name: str = "", avatar_i
     # 角色人设块（根据 avatar_id 不同切换风格）
     persona_block = build_persona_block(avatar_id)
 
-    # 用户称呼（前端通过 WebSocket 传过来，保存在 localStorage）
-    safe_user_name = (user_name or "").strip()
+    # 用户称呼
     if safe_user_name:
         address_block = (
             f"\n        # 用户称呼\n"
@@ -355,7 +366,7 @@ async def llm_chat(user_text, emotion, session_id, user_name: str = "", avatar_i
         system_prompt = f"""
         # 角色
         你是一位温暖、口语化的中文语音陪伴助手，正在和一位老年朋友聊天。
-{persona_block}{address_block}
+{persona_block}{address_block}{profile_block}
         # 本轮任务
         用户刚刚问了一条实时信息（天气、日期、新闻、健康贴士、成语或音乐推荐），后端已经查好结果。
         你现在的唯一任务，是把下面【实时工具数据】里的内容温暖、自然地说给用户听。
@@ -380,9 +391,8 @@ async def llm_chat(user_text, emotion, session_id, user_name: str = "", avatar_i
     else:
         system_prompt = f"""
         # Role
-        你是一个富有共情力、具备专业心理学知识的情感陪护数字人。你的核心使命是为用户（尤其是面临精神孤独的老年群体）提供“可陪伴、可引导、可持续”的心理健康和情感支持。
-{persona_block}{address_block}
-
+        你是一个富有共情力、具备专业心理学知识的情感陪护数字人。你的核心使命是为用户（尤其是面临精神孤独的老年群体）提供”可陪伴、可引导、可持续”的心理健康和情感支持。
+{persona_block}{address_block}{profile_block}
         # Objective
         通过自然的语音对话，完成“心理状态评估 -> 引导与干预 -> 状态再评估”的主动闭环。你需要能够识别用户的焦虑倾向、抑郁倾向或双向情感障碍风险，并提供专业的心理抚慰。
 
