@@ -1,0 +1,37 @@
+{
+  "1779952552654": {
+    "demographics": {
+      "age": null,
+      "gender": null,
+      "location": null
+    },
+    "social": {
+      "occupation": null,
+      "marital_status": null,
+      "children": [],
+      "living_situation": null
+    },
+    "health": {
+      "conditions": [],
+      "mobility": null
+    },
+    "psychological": {
+      "communication_style": null,
+      "emotional_tendencies": [],
+      "topics_of_interest": [],
+      "sensitive_topics": [],
+      "personality_traits": []
+    },
+    "preferences": {
+      "preferred_address": "李爷爷",
+      "talk_length": null,
+      "humor_tolerance": null
+    },
+    "inferred_facts": [],
+    "summary": "",
+    "last_updated": null,
+    "total_turns": 14,
+    "total_extractions": 0,
+    "turns_since_last_extraction": 14
+  }
+}

@@ -313,7 +313,7 @@ def build_persona_block(avatar_id) -> str:
     )
 
 
-async def llm_chat(user_text, emotion, session_id, user_name: str = "", avatar_id: int = 1, user_id: str = ""):
+async def llm_chat(user_text, emotion, session_id, user_name: str = "", avatar_id: int = 1, user_id: str = "", city: str = ""):
     url = "https://api.siliconflow.cn/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {API_KEY}",
@@ -344,8 +344,8 @@ async def llm_chat(user_text, emotion, session_id, user_name: str = "", avatar_i
     tool_name = detect_tool(user_text)
     tool_context = ""
     if tool_name:
-        tool_context = await call_tool(tool_name, user_text)
-        print(f"[Tool] 关键词命中 {tool_name}，结果长度 {len(tool_context)}")
+        tool_context = await call_tool(tool_name, user_text, city=city)
+        print(f"[Tool] 关键词命中 {tool_name} city={city!r}，结果长度 {len(tool_context)}")
     # -----------------------------------------------------
 
     # 角色人设块（根据 avatar_id 不同切换风格）
@@ -451,11 +451,14 @@ async def llm_chat(user_text, emotion, session_id, user_name: str = "", avatar_i
                             break
                         try:
                             res_json = json.loads(data_str)
-                            chunk = res_json["choices"][0]["delta"].get("content", "")
+                            choices = res_json.get("choices") or []
+                            if not choices:
+                                continue
+                            chunk = choices[0].get("delta", {}).get("content", "")
                             if chunk:
                                 yielded_any = True
                                 yield chunk
-                        except json.JSONDecodeError:
+                        except (json.JSONDecodeError, KeyError, IndexError):
                             continue
 
     except Exception as e:

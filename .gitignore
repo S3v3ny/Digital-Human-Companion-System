@@ -47,3 +47,5 @@ desktop.ini
 .vscode/
 .idea/
 *.swp
+
+session_memory.json

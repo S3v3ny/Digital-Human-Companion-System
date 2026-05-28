@@ -399,6 +399,7 @@ async def process_user_message(
     preset_reply: str = None,
     user_name: str = "",
     user_id: str = "",
+    city: str = "",
 ):
     chunk_queue = asyncio.Queue()
     sentinel = object()
@@ -533,7 +534,7 @@ async def process_user_message(
                     response_state.interrupted = True
                     break
         else:
-            async for char in llm_chat(user_text, emotion, session_id, user_name=user_name, avatar_id=avatar_id, user_id=user_id):
+            async for char in llm_chat(user_text, emotion, session_id, user_name=user_name, avatar_id=avatar_id, user_id=user_id, city=city):
                 if not is_current_response(response_state.response_id):
                     response_state.interrupted = True
                     break
@@ -672,6 +673,7 @@ async def websocket_chat(websocket: WebSocket):
     current_avatar_id = 1
     current_user_name = ""
     current_user_id = ""
+    current_city = ""          # 由前端定位后通过 location / init 消息同步
     last_emotion_time = 0
     emotion_busy = False
 
@@ -713,6 +715,7 @@ async def websocket_chat(websocket: WebSocket):
                 preset_reply=preset_reply,
                 user_name=current_user_name,
                 user_id=current_user_id,
+                city=current_city,
             )
         )
 
@@ -853,6 +856,22 @@ async def websocket_chat(websocket: WebSocket):
                 if incoming_name:
                     current_user_name = incoming_name
 
+                # 前端若携带缓存城市（init 时 localStorage 已有）则同步
+                incoming_city = (payload.get("city") or "").strip()
+                if incoming_city:
+                    current_city = incoming_city
+                    print(f"[location] init 同步城市: {current_city}")
+
+                continue
+
+            # -------------------------
+            # 前端定位城市上报（geolocation 异步完成后发送）
+            # -------------------------
+            if msg_type == "location":
+                incoming_city = (payload.get("city") or "").strip()
+                if incoming_city:
+                    current_city = incoming_city
+                    print(f"[location] 城市更新: {current_city}")
                 continue
 
             # -------------------------
@@ -910,6 +929,11 @@ async def websocket_chat(websocket: WebSocket):
                 incoming_uid = (payload.get("userId") or "").strip()
                 if incoming_uid:
                     current_user_id = incoming_uid
+
+                # 每条消息都带城市，确保天气查询始终用正确定位
+                incoming_city = (payload.get("city") or "").strip()
+                if incoming_city:
+                    current_city = incoming_city
 
                 if user_text:
                     await handle_user_text(user_text)

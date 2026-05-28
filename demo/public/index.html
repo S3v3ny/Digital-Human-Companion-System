@@ -421,7 +421,7 @@
             <div class="flex items-center justify-between mb-2">
               <div class="flex items-center gap-2">
                 <i data-lucide="map-pin" class="text-ink-500" style="width:18px;height:18px;"></i>
-                <button id="weatherCity" type="button" onclick="changeWeatherCity()" class="text-base font-medium text-ink-700 hover:text-warm-600 underline-offset-4 hover:underline" title="点击切换城市">--</button>
+                <span id="weatherCity" class="text-base font-medium text-ink-700">--</span>
               </div>
               <span class="text-sm text-ink-500" id="weatherDay">今天</span>
             </div>
@@ -642,24 +642,16 @@
         // 立刻反映到 UI 上，避免"看起来没变化"
         const cityEl = document.getElementById('weatherCity');
         if (cityEl) cityEl.textContent = detected;
+        // 异步定位完成后立刻通知后端，确保聊天天气查询也用正确城市
+        if (typeof wsSend === 'function') {
+          wsSend({ type: 'location', city: detected });
+        }
         return detected;
       }
       console.warn('[weather] 未能自动定位，将使用后端默认城市；可点城市名手动设置');
       return null;
     }
 
-    window.changeWeatherCity = function () {
-      const cur = localStorage.getItem(CITY_KEY) || '';
-      const next = prompt('请输入城市名（如 北京 / 上海 / 杭州）：', cur);
-      if (next === null) return;
-      const trimmed = next.trim();
-      if (trimmed) {
-        localStorage.setItem(CITY_KEY, trimmed);
-      } else {
-        localStorage.removeItem(CITY_KEY);
-      }
-      refreshWeather();
-    };
 
     async function refreshWeather() {
       try {

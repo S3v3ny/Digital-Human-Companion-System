@@ -425,7 +425,7 @@ function connectWebSocket() {
     setStatus(STATUS.online);
     // 只有已选择头像（在聊天页）才发 init，选头像页静默保活
     if (state.avatar) {
-      wsSend({ type: 'init', avatarId: state.avatar.id, avatarName: state.avatar.name, sessionId: state.sessionId, userName: state.userName, userId: state.userId });
+      wsSend({ type: 'init', avatarId: state.avatar.id, avatarName: state.avatar.name, sessionId: state.sessionId, userName: state.userName, userId: state.userId, city: localStorage.getItem('warm-companion-city') || '' });
     }
   };
   state.ws.onmessage = (e) => {
@@ -714,7 +714,7 @@ function sendMessage() {
   if (!state.bargeInActive) AudioPlayer.reset();
   state.bargeInActive = false;
   if (state.ws && state.ws.readyState === WebSocket.OPEN) {
-    wsSend({ type: 'message', content: text, sessionId: state.sessionId, timestamp: Date.now(), userName: state.userName, userId: state.userId });
+    wsSend({ type: 'message', content: text, sessionId: state.sessionId, timestamp: Date.now(), userName: state.userName, userId: state.userId, city: localStorage.getItem('warm-companion-city') || '' });
   } else {
     showThinking(false);
     setStatus(STATUS.online);
