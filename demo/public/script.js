@@ -6,8 +6,8 @@
 const AVATARS = [
   null,
   { id: 1, name: '小丽', desc: '温柔可爱，陪你聊天～', icon: '👧', skinClass: 'avatar-friend1', welcome: '你好呀～我是小丽，很高兴认识你！', modelPath: '/static/female-avatar1.glb', imagePath: '/static/avatar-xiaoli.png?v=3' },
-  { id: 2, name: '老王', desc: '风趣幽默，随时唠嗑～', icon: '👴', skinClass: 'avatar-friend2', welcome: '你好，我是老王，咱们随便聊！', modelPath: '/static/3d卡通老人头部模型.glb', imagePath: '/static/avatar-laowang.png?v=3' },
-  { id: 3, name: '小明', desc: '年轻伙伴，活力陪聊～', icon: '🧑', skinClass: 'avatar-friend3', welcome: '你好，我是小明，和你聊聊生活、兴趣、好心情！', modelPath: '/static/3d卡通少年头部模型.glb', imagePath: '/static/avatar-xiaoming.png?v=3' },
+  { id: 2, name: '老王', desc: '风趣幽默，随时唠嗑～', icon: '👴', skinClass: 'avatar-friend2', welcome: '你好，我是老王，咱们随便聊！', modelPath: '/static/laowang-avatar.glb', imagePath: '/static/avatar-laowang.png?v=3' },
+  { id: 3, name: '小明', desc: '年轻伙伴，活力陪聊～', icon: '🧑', skinClass: 'avatar-friend3', welcome: '你好，我是小明，和你聊聊生活、兴趣、好心情！', modelPath: '/static/male-avatar1.glb', imagePath: '/static/avatar-xiaoming.png?v=3' },
 ];
 
 const STATUS = {
