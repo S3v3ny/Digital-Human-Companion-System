@@ -34,9 +34,10 @@
     html { font-size: 16px; }                  /* 1rem 基准；关怀模式时变大 */
     body { background-color: #FDF9F1; color: #3D2E1F; font-size: 1.0625rem; }
     [data-lucide] { width: 1.375rem; height: 1.375rem; stroke-width: 2; }
-    .nice-scroll::-webkit-scrollbar { width: 8px; }
-    .nice-scroll::-webkit-scrollbar-thumb { background: #E8D5A8; border-radius: 8px; }
-    .nice-scroll::-webkit-scrollbar-track { background: transparent; }
+    .nice-scroll::-webkit-scrollbar { width: 4px; }
+    .nice-scroll::-webkit-scrollbar-thumb { background: transparent; border-radius: 4px; transition: background .2s; }
+    .nice-scroll:hover::-webkit-scrollbar-thumb { background: #D4BFA0; }
+    .nice-scroll::-webkit-scrollbar-track { background: transparent; margin: 12px 0; }
 
     /* ---------------- 页面切换 ---------------- */
     .page { display: none; }
@@ -131,14 +132,32 @@
     }
 
     /* ---------------- 语音按钮 ---------------- */
+    .center-voice-btn {
+      user-select: none; -webkit-user-select: none; touch-action: none;
+    }
     .center-voice-btn.recording {
       background: linear-gradient(135deg, #E5564E, #D43F3F) !important;
       animation: recordingPulse 1s ease-in-out infinite;
     }
-    .center-voice-btn.pressing { transform: scale(0.95); }
+    .center-voice-btn.pressing { transform: scale(0.96); }
     @keyframes recordingPulse {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(229,86,78,0.5); }
-      50% { box-shadow: 0 0 0 14px rgba(229,86,78,0); }
+      0%, 100% { box-shadow: 0 0 0 0 rgba(229,86,78,0.45); }
+      50%       { box-shadow: 0 0 0 10px rgba(229,86,78,0); }
+    }
+    /* 波形动画 */
+    .voice-wave { display: flex; align-items: center; gap: 3px; height: 22px; }
+    .voice-wave span {
+      width: 3px; background: rgba(255,255,255,0.9); border-radius: 2px;
+      animation: waveBar 0.7s ease-in-out infinite;
+    }
+    .voice-wave span:nth-child(1) { height: 6px;  animation-delay: 0s;    }
+    .voice-wave span:nth-child(2) { height: 14px; animation-delay: 0.1s;  }
+    .voice-wave span:nth-child(3) { height: 20px; animation-delay: 0.2s;  }
+    .voice-wave span:nth-child(4) { height: 14px; animation-delay: 0.3s;  }
+    .voice-wave span:nth-child(5) { height: 6px;  animation-delay: 0.4s;  }
+    @keyframes waveBar {
+      0%, 100% { transform: scaleY(0.5); opacity: 0.65; }
+      50%       { transform: scaleY(1);   opacity: 1;    }
     }
 
     /* ---------------- 关怀模式 ---------------- */
@@ -350,29 +369,34 @@
           </div>
 
           <!-- 输入区：药丸形 -->
-          <div class="flex-shrink-0 bg-white rounded-full shadow-card flex items-center gap-3 pl-5 pr-3 py-2">
-            <div class="flex items-center gap-2 text-ink-500 flex-shrink-0">
-              <i data-lucide="mic" style="width:24px;height:24px;"></i>
-              <span id="voiceLabel" class="text-base whitespace-nowrap">按住 说话</span>
-            </div>
-            <div class="w-px h-8 bg-cream-200"></div>
+          <div class="flex-shrink-0 bg-white rounded-full shadow-card flex items-center gap-3 pl-3 pr-3 py-2">
 
-            <!-- 中央语音按钮：长按录音 -->
-            <div class="flex-1 flex justify-center">
-              <button id="centerVoiceBtn" type="button"
-                onmousedown="startVoiceRecording()" onmouseup="stopVoiceRecording()"
-                ontouchstart="startVoiceRecording()" ontouchend="stopVoiceRecording()"
-                class="center-voice-btn w-14 h-14 rounded-full bg-gradient-to-br from-warm-500 to-warm-600 hover:scale-105 active:scale-95 transition-transform shadow-lg flex items-center justify-center text-white ring-4 ring-cream-100">
-                <i data-lucide="mic" style="width:26px;height:26px;"></i>
-              </button>
-            </div>
-            <div class="w-px h-8 bg-cream-200"></div>
+            <!-- 按住说话按钮（自包含状态显示） -->
+            <button id="centerVoiceBtn" type="button"
+              onmousedown="startVoiceRecording()" onmouseup="stopVoiceRecording()" onmouseleave="stopVoiceRecording()"
+              ontouchstart="startVoiceRecording()" ontouchend="stopVoiceRecording()" ontouchcancel="stopVoiceRecording()"
+              class="center-voice-btn flex-shrink-0 h-12 px-5 rounded-full bg-gradient-to-br from-warm-500 to-warm-600 shadow-lg flex items-center gap-2 text-white transition-transform">
+              <!-- 默认状态 -->
+              <div id="voiceIdleState" class="flex items-center gap-2">
+                <i data-lucide="mic" style="width:20px;height:20px;"></i>
+                <span class="font-medium text-base whitespace-nowrap">按住 说话</span>
+              </div>
+              <!-- 录音中状态 -->
+              <div id="voiceRecordingState" class="hidden items-center gap-2">
+                <div class="voice-wave">
+                  <span></span><span></span><span></span><span></span><span></span>
+                </div>
+                <span class="font-medium text-base whitespace-nowrap">松开 发送</span>
+              </div>
+            </button>
 
-            <!-- 键盘输入：展开输入框 -->
-            <div class="flex items-center gap-2 flex-shrink-0">
+            <div class="w-px h-8 bg-cream-200 flex-shrink-0"></div>
+
+            <!-- 键盘输入 -->
+            <div class="flex items-center gap-2 flex-1">
               <input id="messageInput" type="text" placeholder="或在此输入..."
-                class="w-44 px-4 py-2 rounded-full border-2 border-cream-200 focus:border-warm-500 outline-none text-base text-ink-900" />
-              <button id="sendBtn" class="px-5 py-2 bg-warm-500 hover:bg-warm-600 text-white rounded-full font-medium flex items-center gap-1.5">
+                class="flex-1 min-w-0 px-4 py-2 rounded-full border-2 border-cream-200 focus:border-warm-500 outline-none text-base text-ink-900" />
+              <button id="sendBtn" class="flex-shrink-0 px-5 py-2 bg-warm-500 hover:bg-warm-600 text-white rounded-full font-medium flex items-center gap-1.5">
                 <i data-lucide="send" style="width:18px;height:18px;"></i> 发送
               </button>
             </div>

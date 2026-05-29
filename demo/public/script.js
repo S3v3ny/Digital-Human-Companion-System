@@ -1058,16 +1058,22 @@ function stopVoiceUI() {
   state.recording = false;
   const btn = document.getElementById('centerVoiceBtn');
   if (btn) btn.classList.remove('recording');
+  const idle = document.getElementById('voiceIdleState');
+  const rec  = document.getElementById('voiceRecordingState');
+  if (idle) idle.classList.remove('hidden');
+  if (rec)  rec.classList.add('hidden');
   stopMicLipSync();
 }
 
 function startVoiceRecording() {
   state.pressTimer = setTimeout(() => {
     state.isLongPress = true;
-    const btn = document.getElementById('centerVoiceBtn');
-    if (btn) btn.classList.add('recording');
-    const label = document.getElementById('voiceLabel');
-    if (label) { label.textContent = '录音中...'; label.classList.add('text-danger-500'); }
+    const btn  = document.getElementById('centerVoiceBtn');
+    const idle = document.getElementById('voiceIdleState');
+    const rec  = document.getElementById('voiceRecordingState');
+    if (btn)  btn.classList.add('recording');
+    if (idle) idle.classList.add('hidden');
+    if (rec)  { rec.classList.remove('hidden'); rec.classList.add('flex'); }
     if (!_SRConstructor) { showToast('您的浏览器不支持语音识别功能', 'warning'); return; }
     state.recognition = createRecognitionInstance();
     try { state.recognition.start(); } catch (_) { showToast('语音识别暂时不可用', 'warning'); }
@@ -1082,12 +1088,9 @@ function stopVoiceRecording() {
   if (btn) btn.classList.remove('pressing');
   if (state.isLongPress) {
     state.isLongPress = false;
-    if (btn) btn.classList.remove('recording');
-    const label = document.getElementById('voiceLabel');
-    if (label) { label.textContent = '按住 说话'; label.classList.remove('text-danger-500'); }
+    stopVoiceUI();
     if (state.recognition) { try { state.recognition.stop(); } catch (_) { stopVoiceUI(); } }
   } else {
-    dom.messageInput.placeholder = '直接输入或长按说话';
     showToast('💡 长按按钮可以语音输入哦', 'info');
   }
 }
