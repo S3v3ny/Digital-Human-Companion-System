@@ -655,22 +655,24 @@
     }
 
     async function resolveCity() {
-      const cached = localStorage.getItem(CITY_KEY);
-      if (cached) {
-        console.log('[weather] 使用缓存城市', cached);
-        return cached;
-      }
+      // 每次优先尝试地理定位，定位成功则更新缓存；定位失败才回退到缓存
       const detected = await detectCityByGeolocation();
       if (detected) {
-        localStorage.setItem(CITY_KEY, detected);
-        // 立刻反映到 UI 上，避免"看起来没变化"
-        const cityEl = document.getElementById('weatherCity');
-        if (cityEl) cityEl.textContent = detected;
-        // 异步定位完成后立刻通知后端，确保聊天天气查询也用正确城市
-        if (typeof wsSend === 'function') {
-          wsSend({ type: 'location', city: detected });
+        const cached = localStorage.getItem(CITY_KEY);
+        if (detected !== cached) {
+          localStorage.setItem(CITY_KEY, detected);
+          const cityEl = document.getElementById('weatherCity');
+          if (cityEl) cityEl.textContent = detected;
+          if (typeof wsSend === 'function') {
+            wsSend({ type: 'location', city: detected });
+          }
         }
         return detected;
+      }
+      const cached = localStorage.getItem(CITY_KEY);
+      if (cached) {
+        console.log('[weather] 定位失败，使用缓存城市', cached);
+        return cached;
       }
       console.warn('[weather] 未能自动定位，将使用后端默认城市；可点城市名手动设置');
       return null;
