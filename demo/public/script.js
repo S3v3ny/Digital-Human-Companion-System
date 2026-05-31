@@ -918,7 +918,7 @@ function renderSelectPageUserBar() {
     return;
   }
 
-  users.sort((a, b) => (b.lastActiveAt || 0) - (a.lastActiveAt || 0)).forEach(u => {
+  users.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)).forEach(u => {
     const btn = document.createElement('button');
     btn.className = 'user-chip ' + (u.id === state.userId ? 'selected' : 'unselected');
     btn.textContent = u.name;
