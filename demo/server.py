@@ -39,7 +39,7 @@ from emotion import get_face_emotion
 from tts import tts_engine, TTSGenerationError
 
 from faceformer_adapter import audio_bytes_to_user_emotion
-from tools import get_weather, get_calendar
+from tools import get_weather, get_calendar, get_news
 import reminders as reminders_mod
 
 app = FastAPI()
@@ -616,6 +616,12 @@ async def get_index():
 @app.get("/api/weather")
 async def api_weather(city: Optional[str] = None):
     data = await get_weather(city)
+    return JSONResponse(data)
+
+
+@app.get("/api/news")
+async def api_news(topic: Optional[str] = None):
+    data = await get_news(topic)
     return JSONResponse(data)
 
 
