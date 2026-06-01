@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>虚拟情感陪护 · 数字人陪伴您每一天</title>
+  <title>心聆智伴 · 数字人陪伴您每一天</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
@@ -14,9 +14,9 @@
         extend: {
           colors: {
             cream: { 50: '#FDF9F1', 100: '#FAF3E4', 200: '#F3E8CF', 300: '#E8D5A8' },
-            ink:   { 900: '#3D2E1F', 700: '#5C4A36', 500: '#8B7A65', 400: '#A89B86' },
-            warm:  { 500: '#E89B4C', 600: '#D87E2A' },
-            danger:{ 500: '#E5564E', 50: '#FCEBE9' },
+            ink: { 900: '#3D2E1F', 700: '#5C4A36', 500: '#8B7A65', 400: '#A89B86' },
+            warm: { 500: '#E89B4C', 600: '#D87E2A' },
+            danger: { 500: '#E5564E', 50: '#FCEBE9' },
           },
           fontFamily: { sans: ['"Noto Sans SC"', 'system-ui', 'sans-serif'] },
           boxShadow: {
@@ -30,68 +30,202 @@
 
   <style>
     /* ---------------- 基础 ---------------- */
-    html, body { font-family: 'Noto Sans SC', system-ui, sans-serif; height: 100%; overflow: hidden; }
-    html { font-size: 16px; }                  /* 1rem 基准；关怀模式时变大 */
-    body { background-color: #FDF9F1; color: #3D2E1F; font-size: 1.0625rem; }
-    [data-lucide] { width: 1.375rem; height: 1.375rem; stroke-width: 2; }
-    .nice-scroll::-webkit-scrollbar { width: 4px; }
-    .nice-scroll::-webkit-scrollbar-thumb { background: transparent; border-radius: 4px; transition: background .2s; }
-    .nice-scroll:hover::-webkit-scrollbar-thumb { background: #D4BFA0; }
-    .nice-scroll::-webkit-scrollbar-track { background: transparent; margin: 12px 0; }
+    html,
+    body {
+      font-family: 'Noto Sans SC', system-ui, sans-serif;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    html {
+      font-size: 16px;
+    }
+
+    /* 1rem 基准；关怀模式时变大 */
+    body {
+      background-color: #FDF9F1;
+      color: #3D2E1F;
+      font-size: 1.0625rem;
+    }
+
+    [data-lucide] {
+      width: 1.375rem;
+      height: 1.375rem;
+      stroke-width: 2;
+    }
+
+    .nice-scroll::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .nice-scroll::-webkit-scrollbar-thumb {
+      background: transparent;
+      border-radius: 4px;
+      transition: background .2s;
+    }
+
+    .nice-scroll:hover::-webkit-scrollbar-thumb {
+      background: #D4BFA0;
+    }
+
+    .nice-scroll::-webkit-scrollbar-track {
+      background: transparent;
+      margin: 12px 0;
+    }
 
     /* ---------------- 页面切换 ---------------- */
-    .page { display: none; }
-    .page.active { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+    .page {
+      display: none;
+    }
+
+    .page.active {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
 
     /* ---------------- 聊天气泡 ---------------- */
-    .message { display: flex; align-items: flex-start; gap: 12px; }
-    .message::before {
-      content: ''; width: 44px; height: 44px; border-radius: 50%;
-      flex-shrink: 0; background-size: cover; background-position: center;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    .message {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
     }
+
+    .message::before {
+      content: '';
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background-size: cover;
+      background-position: center;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+    }
+
     .message-bot::before {
       background-color: #FAF3E4;
       background-image: var(--bot-avatar-url, url('/static/avatar-xiaoli.png?v=3'));
     }
-    .message-user { flex-direction: row-reverse; }
+
+    .message-user {
+      flex-direction: row-reverse;
+    }
+
     .message-user::before {
       background-color: #F3E8CF;
       background-image: url('https://api.dicebear.com/9.x/personas/svg?seed=LiUncle&backgroundColor=c5d4e8');
     }
+
     .bubble {
-      padding: 12px 20px; border-radius: 18px; max-width: 75%;
-      font-size: 1.0625rem; line-height: 1.55; color: #3D2E1F; word-break: break-word;
+      padding: 12px 20px;
+      border-radius: 18px;
+      max-width: 75%;
+      font-size: 1.0625rem;
+      line-height: 1.55;
+      color: #3D2E1F;
+      word-break: break-word;
     }
-    .message-bot .bubble { background: #FAF3E4; border-top-left-radius: 6px; }
-    .message-user .bubble { background: #F3E8CF; border-top-right-radius: 6px; }
-    .thinking-dots { color: #8B7A65; }
+
+    .message-bot .bubble {
+      background: #FAF3E4;
+      border-top-left-radius: 6px;
+    }
+
+    .message-user .bubble {
+      background: #F3E8CF;
+      border-top-right-radius: 6px;
+    }
+
+    .thinking-dots {
+      color: #8B7A65;
+    }
+
     .thinking-dots::after {
-      content: ''; display: inline-block; width: 8px;
+      content: '';
+      display: inline-block;
+      width: 8px;
       animation: thinkingDot 1.2s steps(4, end) infinite;
     }
-    @keyframes thinkingDot { 0%{content:''} 25%{content:'.'} 50%{content:'..'} 75%{content:'...'} }
+
+    @keyframes thinkingDot {
+      0% {
+        content: ''
+      }
+
+      25% {
+        content: '.'
+      }
+
+      50% {
+        content: '..'
+      }
+
+      75% {
+        content: '...'
+      }
+    }
 
     /* ---------------- 会话列表项 ---------------- */
     .session-item {
-      display: flex; align-items: center; gap: 8px;
-      padding: 14px 14px; border-radius: 12px; cursor: pointer;
-      transition: all .15s; border: 1px solid transparent; margin-bottom: 2px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 14px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all .15s;
+      border: 1px solid transparent;
+      margin-bottom: 2px;
     }
-    .session-item:hover { background: #FDF9F1; border-color: #F3E8CF; }
-    .session-item.active { background: #FAF3E4; border-color: #E8D5A8; }
-    .session-content { flex: 1; min-width: 0; }
-    .session-time { font-size: 0.8125rem; color: #D87E2A; font-weight: 500; margin-bottom: 4px; }
+
+    .session-item:hover {
+      background: #FDF9F1;
+      border-color: #F3E8CF;
+    }
+
+    .session-item.active {
+      background: #FAF3E4;
+      border-color: #E8D5A8;
+    }
+
+    .session-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .session-time {
+      font-size: 0.8125rem;
+      color: #D87E2A;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
     .session-summary {
-      font-size: 1rem; color: #3D2E1F;
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font-size: 1rem;
+      color: #3D2E1F;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
+
     .session-delete-btn {
-      background: transparent; border: none; cursor: pointer;
-      font-size: 0.875rem; padding: 6px 8px; border-radius: 6px;
-      opacity: 0.4; transition: all .15s; color: #8B7A65;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-size: 0.875rem;
+      padding: 6px 8px;
+      border-radius: 6px;
+      opacity: 0.4;
+      transition: all .15s;
+      color: #8B7A65;
     }
-    .session-delete-btn:hover { opacity: 1; background: #FCEBE9; color: #E5564E; }
+
+    .session-delete-btn:hover {
+      opacity: 1;
+      background: #FCEBE9;
+      color: #E5564E;
+    }
 
     /* ---------------- 数字人 3D 容器 ---------------- */
     .digital-human-container {
@@ -100,6 +234,7 @@
       height: 100%;
       overflow: hidden;
     }
+
     .digital-human-container canvas {
       width: 100% !important;
       height: 100% !important;
@@ -113,99 +248,303 @@
 
     /* ---------------- 视频区状态层 ---------------- */
     #breathingLight {
-      position: absolute; inset: 0;
+      position: absolute;
+      inset: 0;
       background: radial-gradient(circle at center, transparent, transparent);
-      opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 2;
+      opacity: 0;
+      transition: opacity .3s;
+      pointer-events: none;
+      z-index: 2;
     }
-    #breathingLight.active { opacity: 1; }
-    #breathingLight.listening { background: radial-gradient(circle at center, rgba(232,155,76,0.18), transparent 65%); animation: breathePulse 2s ease-in-out infinite; }
-    #breathingLight.thinking  { background: radial-gradient(circle at center, rgba(99,179,237,0.18), transparent 65%); }
-    #breathingLight.speaking  { background: radial-gradient(circle at center, rgba(229,86,78,0.15), transparent 65%); animation: breathePulse 1.4s ease-in-out infinite; }
-    @keyframes breathePulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+    #breathingLight.active {
+      opacity: 1;
+    }
+
+    #breathingLight.listening {
+      background: radial-gradient(circle at center, rgba(232, 155, 76, 0.18), transparent 65%);
+      animation: breathePulse 2s ease-in-out infinite;
+    }
+
+    #breathingLight.thinking {
+      background: radial-gradient(circle at center, rgba(99, 179, 237, 0.18), transparent 65%);
+    }
+
+    #breathingLight.speaking {
+      background: radial-gradient(circle at center, rgba(229, 86, 78, 0.15), transparent 65%);
+      animation: breathePulse 1.4s ease-in-out infinite;
+    }
+
+    @keyframes breathePulse {
+
+      0%,
+      100% {
+        opacity: 0.4;
+      }
+
+      50% {
+        opacity: 1;
+      }
+    }
 
     #avatarStatus {
-      position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%);
-      background: rgba(0,0,0,0.45); color: #fff; padding: 6px 14px;
-      border-radius: 9999px; font-size: 0.875rem; font-weight: 500;
-      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-      z-index: 12; white-space: nowrap;
+      position: absolute;
+      bottom: 64px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.45);
+      color: #fff;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 12;
+      white-space: nowrap;
     }
 
     /* ---------------- 语音按钮 ---------------- */
     .center-voice-btn {
-      user-select: none; -webkit-user-select: none; touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
     }
+
     .center-voice-btn.recording {
       background: linear-gradient(135deg, #E5564E, #D43F3F) !important;
       animation: recordingPulse 1s ease-in-out infinite;
     }
-    .center-voice-btn.pressing { transform: scale(0.96); }
-    @keyframes recordingPulse {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(229,86,78,0.45); }
-      50%       { box-shadow: 0 0 0 10px rgba(229,86,78,0); }
+
+    .center-voice-btn.pressing {
+      transform: scale(0.96);
     }
+
+    @keyframes recordingPulse {
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 0 rgba(229, 86, 78, 0.45);
+      }
+
+      50% {
+        box-shadow: 0 0 0 10px rgba(229, 86, 78, 0);
+      }
+    }
+
     /* 波形动画 */
-    .voice-wave { display: flex; align-items: center; gap: 3px; height: 22px; }
+    .voice-wave {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      height: 22px;
+    }
+
     .voice-wave span {
-      width: 3px; background: rgba(255,255,255,0.9); border-radius: 2px;
+      width: 3px;
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 2px;
       animation: waveBar 0.7s ease-in-out infinite;
     }
-    .voice-wave span:nth-child(1) { height: 6px;  animation-delay: 0s;    }
-    .voice-wave span:nth-child(2) { height: 14px; animation-delay: 0.1s;  }
-    .voice-wave span:nth-child(3) { height: 20px; animation-delay: 0.2s;  }
-    .voice-wave span:nth-child(4) { height: 14px; animation-delay: 0.3s;  }
-    .voice-wave span:nth-child(5) { height: 6px;  animation-delay: 0.4s;  }
+
+    .voice-wave span:nth-child(1) {
+      height: 6px;
+      animation-delay: 0s;
+    }
+
+    .voice-wave span:nth-child(2) {
+      height: 14px;
+      animation-delay: 0.1s;
+    }
+
+    .voice-wave span:nth-child(3) {
+      height: 20px;
+      animation-delay: 0.2s;
+    }
+
+    .voice-wave span:nth-child(4) {
+      height: 14px;
+      animation-delay: 0.3s;
+    }
+
+    .voice-wave span:nth-child(5) {
+      height: 6px;
+      animation-delay: 0.4s;
+    }
+
     @keyframes waveBar {
-      0%, 100% { transform: scaleY(0.5); opacity: 0.65; }
-      50%       { transform: scaleY(1);   opacity: 1;    }
+
+      0%,
+      100% {
+        transform: scaleY(0.5);
+        opacity: 0.65;
+      }
+
+      50% {
+        transform: scaleY(1);
+        opacity: 1;
+      }
     }
 
     /* ---------------- 关怀模式 ---------------- */
     /* 通过抬高 html 根字号，让所有 rem 单位（含 Tailwind 的 text-*）一起放大 */
-    html.care-mode { font-size: 20px; }                    /* 默认 16px → 20px，约 +25% */
-    html.care-mode [data-lucide] { stroke-width: 2.2; }    /* 图标线条略粗，更清晰 */
+    html.care-mode {
+      font-size: 20px;
+    }
+
+    /* 默认 16px → 20px，约 +25% */
+    html.care-mode [data-lucide] {
+      stroke-width: 2.2;
+    }
+
+    /* 图标线条略粗，更清晰 */
     body.care-mode #careModeToggle {
-      background: #E89B4C; color: #fff;
+      background: #E89B4C;
+      color: #fff;
       border-color: #E89B4C;
     }
-    body.care-mode #careModeToggle [data-lucide] { color: #fff; }
+
+    body.care-mode #careModeToggle [data-lucide] {
+      color: #fff;
+    }
 
     /* ---------------- 用户系统 ---------------- */
-    #userModal { display: none; }
-    #userModal.active { display: flex; }
+    #userModal {
+      display: none;
+    }
+
+    #userModal.active {
+      display: flex;
+    }
+
     .user-chip {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 8px 18px; border-radius: 9999px; font-size: 1rem;
-      font-weight: 500; cursor: pointer; transition: all .15s; border: 2px solid;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 18px;
+      border-radius: 9999px;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all .15s;
+      border: 2px solid;
     }
-    .user-chip.selected { background: #E89B4C; color: #fff; border-color: #E89B4C; box-shadow: 0 3px 10px rgba(232,155,76,.35); }
-    .user-chip.unselected { background: #fff; color: #5C4A36; border-color: #E8D5A8; }
-    .user-chip.unselected:hover { border-color: #E89B4C; color: #D87E2A; }
-    .user-chip.add-btn { background: #FDF9F1; color: #8B7A65; border-color: #E8D5A8; border-style: dashed; }
-    .user-chip.add-btn:hover { border-color: #E89B4C; color: #D87E2A; background: #FAF3E4; }
+
+    .user-chip.selected {
+      background: #E89B4C;
+      color: #fff;
+      border-color: #E89B4C;
+      box-shadow: 0 3px 10px rgba(232, 155, 76, .35);
+    }
+
+    .user-chip.unselected {
+      background: #fff;
+      color: #5C4A36;
+      border-color: #E8D5A8;
+    }
+
+    .user-chip.unselected:hover {
+      border-color: #E89B4C;
+      color: #D87E2A;
+    }
+
+    .user-chip.add-btn {
+      background: #FDF9F1;
+      color: #8B7A65;
+      border-color: #E8D5A8;
+      border-style: dashed;
+    }
+
+    .user-chip.add-btn:hover {
+      border-color: #E89B4C;
+      color: #D87E2A;
+      background: #FAF3E4;
+    }
+
     .user-list-item {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 10px 14px; border-radius: 14px; border: 2px solid #E8D5A8;
-      cursor: pointer; transition: all .15s; margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border-radius: 14px;
+      border: 2px solid #E8D5A8;
+      cursor: pointer;
+      transition: all .15s;
+      margin-bottom: 6px;
     }
-    .user-list-item:hover { border-color: #E89B4C; background: #FDF9F1; }
-    .user-list-item.active { border-color: #E89B4C; background: #FAF3E4; }
+
+    .user-list-item:hover {
+      border-color: #E89B4C;
+      background: #FDF9F1;
+    }
+
+    .user-list-item.active {
+      border-color: #E89B4C;
+      background: #FAF3E4;
+    }
 
     /* ---------------- Toast ---------------- */
     .toast-message {
-      position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
-      padding: 12px 24px; border-radius: 9999px; background: #fff; color: #3D2E1F;
-      box-shadow: 0 8px 30px rgba(0,0,0,0.15); z-index: 1000;
-      animation: toastIn 0.3s ease; font-size: 1rem; font-weight: 500;
+      position: fixed;
+      bottom: 90px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 12px 24px;
+      border-radius: 9999px;
+      background: #fff;
+      color: #3D2E1F;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+      z-index: 1000;
+      animation: toastIn 0.3s ease;
+      font-size: 1rem;
+      font-weight: 500;
     }
-    .toast-message.warning { background: #FEF3C7; color: #92400E; }
-    .toast-message.error   { background: #FCEBE9; color: #B91C1C; }
-    @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translate(-50%, 0); } }
-    @keyframes fadeOutDown { from { opacity: 1; transform: translate(-50%, 0); } to { opacity: 0; transform: translate(-50%, 20px); } }
+
+    .toast-message.warning {
+      background: #FEF3C7;
+      color: #92400E;
+    }
+
+    .toast-message.error {
+      background: #FCEBE9;
+      color: #B91C1C;
+    }
+
+    @keyframes toastIn {
+      from {
+        opacity: 0;
+        transform: translate(-50%, 20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
+    }
+
+    @keyframes fadeOutDown {
+      from {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
+
+      to {
+        opacity: 0;
+        transform: translate(-50%, 20px);
+      }
+    }
 
     /* ---------------- 摄像头 PiP ---------------- */
-    #camera { width: 100%; height: 100%; object-fit: cover; background: #1a1a1a; }
-    .camera-hint:empty { display: none !important; }
+    #camera {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      background: #1a1a1a;
+    }
+
+    .camera-hint:empty {
+      display: none !important;
+    }
   </style>
 </head>
 
@@ -218,36 +557,43 @@
     <div class="flex-1 flex items-center justify-center px-6">
       <div class="max-w-4xl w-full">
         <div class="text-center mb-10">
-          <div class="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-br from-warm-500 to-warm-600 flex items-center justify-center text-white mb-4 shadow-lg">
+          <div
+            class="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-br from-warm-500 to-warm-600 flex items-center justify-center text-white mb-4 shadow-lg">
             <i data-lucide="heart-handshake" style="width:44px;height:44px;"></i>
           </div>
-          <h1 class="text-4xl font-bold text-ink-900">虚拟情感陪护</h1>
+          <h1 class="text-5xl sm:text-6xl font-bold text-ink-900">心聆智伴</h1>
           <p class="text-lg text-ink-500 mt-2">请选择您的陪伴朋友</p>
         </div>
         <!-- 用户选择条 -->
         <div id="selectPageUserBar" class="flex items-center justify-center flex-wrap gap-2 mb-8 min-h-[44px]"></div>
 
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
-          <button onclick="selectAvatar(1)" class="group bg-white rounded-3xl shadow-card p-6 hover:-translate-y-1 hover:shadow-lg transition text-center">
-            <img src="/static/avatar-xiaoli.png?v=3" class="w-28 h-28 mx-auto rounded-full mb-4 bg-cream-100 object-cover" alt="小丽">
+          <button onclick="selectAvatar(1)"
+            class="group bg-white rounded-3xl shadow-card p-6 hover:-translate-y-1 hover:shadow-lg transition text-center">
+            <img src="/static/avatar-xiaoli.png?v=3"
+              class="w-28 h-28 mx-auto rounded-full mb-4 bg-cream-100 object-cover" alt="小丽">
             <h3 class="text-2xl font-bold text-ink-900">小丽</h3>
             <p class="text-ink-500 mt-1">贴心孙女 · 温柔陪伴</p>
             <div class="mt-4 inline-flex items-center gap-2 text-warm-600 font-medium">
               选择她 <i data-lucide="arrow-right" style="width:18px;height:18px;"></i>
             </div>
           </button>
-          <button onclick="selectAvatar(2)" class="group bg-white rounded-3xl shadow-card p-6 hover:-translate-y-1 hover:shadow-lg transition text-center">
-            <img src="/static/avatar-laowang.png?v=3" class="w-28 h-28 mx-auto rounded-full mb-4 bg-cream-100 object-cover" alt="老王">
+          <button onclick="selectAvatar(2)"
+            class="group bg-white rounded-3xl shadow-card p-6 hover:-translate-y-1 hover:shadow-lg transition text-center">
+            <img src="/static/avatar-laowang.png?v=3"
+              class="w-28 h-28 mx-auto rounded-full mb-4 bg-cream-100 object-cover" alt="老王">
             <h3 class="text-2xl font-bold text-ink-900">老王</h3>
             <p class="text-ink-500 mt-1">同龄老友 · 唠嗑谈心</p>
             <div class="mt-4 inline-flex items-center gap-2 text-warm-600 font-medium">
               选择他 <i data-lucide="arrow-right" style="width:18px;height:18px;"></i>
             </div>
           </button>
-          <button onclick="selectAvatar(3)" class="group bg-white rounded-3xl shadow-card p-6 hover:-translate-y-1 hover:shadow-lg transition text-center">
-            <img src="/static/avatar-xiaoming.png?v=3" class="w-28 h-28 mx-auto rounded-full mb-4 bg-cream-100 object-cover" alt="小明">
+          <button onclick="selectAvatar(3)"
+            class="group bg-white rounded-3xl shadow-card p-6 hover:-translate-y-1 hover:shadow-lg transition text-center">
+            <img src="/static/avatar-xiaoming.png?v=3"
+              class="w-28 h-28 mx-auto rounded-full mb-4 bg-cream-100 object-cover" alt="小明">
             <h3 class="text-2xl font-bold text-ink-900">小明</h3>
-            <p class="text-ink-500 mt-1">年轻伙伴 · 活力陪聊</p>
+            <p class="text-ink-500 mt-1">年轻伙伴 · 轻松聊天</p>
             <div class="mt-4 inline-flex items-center gap-2 text-warm-600 font-medium">
               选择他 <i data-lucide="arrow-right" style="width:18px;height:18px;"></i>
             </div>
@@ -266,11 +612,12 @@
       <!-- 顶栏 -->
       <header class="flex-shrink-0 flex items-center justify-between bg-white rounded-2xl shadow-soft px-6 py-3">
         <div class="flex items-center gap-4">
-          <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-warm-500 to-warm-600 flex items-center justify-center text-white shadow-md">
+          <div
+            class="w-14 h-14 rounded-2xl bg-gradient-to-br from-warm-500 to-warm-600 flex items-center justify-center text-white shadow-md">
             <i data-lucide="heart-handshake" style="width:30px;height:30px;"></i>
           </div>
           <div>
-            <h1 class="text-2xl font-bold text-ink-900 leading-tight">虚拟情感陪护</h1>
+            <h1 class="text-2xl font-bold text-ink-900 leading-tight">心聆智伴</h1>
             <p class="text-sm text-ink-500 mt-0.5">数字人陪伴您每一天</p>
           </div>
         </div>
@@ -284,10 +631,12 @@
             <span class="text-lg font-medium text-ink-900">，</span>
             <span id="userDisplayName" class="text-lg font-medium text-ink-900">朋友</span>
           </div>
-          <button id="careModeToggle" onclick="toggleCareMode()" class="flex items-center gap-2 border-2 border-cream-200 hover:border-warm-500 hover:bg-cream-50 transition rounded-full px-5 py-2.5 text-ink-700 font-medium">
+          <button id="careModeToggle" onclick="toggleCareMode()"
+            class="flex items-center gap-2 border-2 border-cream-200 hover:border-warm-500 hover:bg-cream-50 transition rounded-full px-5 py-2.5 text-ink-700 font-medium">
             <i data-lucide="eye"></i> 关怀模式
           </button>
-          <button onclick="goBack()" class="flex items-center gap-2 border-2 border-danger-500 text-danger-500 hover:bg-danger-50 transition rounded-full px-5 py-2.5 font-medium">
+          <button onclick="goBack()"
+            class="flex items-center gap-2 border-2 border-danger-500 text-danger-500 hover:bg-danger-50 transition rounded-full px-5 py-2.5 font-medium">
             <i data-lucide="log-out"></i> 退出
           </button>
         </div>
@@ -314,13 +663,16 @@
               <!-- 当前用户显示 -->
               <div class="flex items-center justify-between bg-cream-50 rounded-xl px-3 py-2.5 border border-cream-200">
                 <div class="flex items-center gap-2 min-w-0">
-                  <div id="currentUserAvatar" class="w-8 h-8 rounded-full bg-warm-200 flex items-center justify-center text-warm-700 font-bold text-sm flex-shrink-0">?</div>
+                  <div id="currentUserAvatar"
+                    class="w-8 h-8 rounded-full bg-warm-200 flex items-center justify-center text-warm-700 font-bold text-sm flex-shrink-0">
+                    ?</div>
                   <div class="min-w-0">
                     <div id="currentUserDisplay" class="font-medium text-ink-900 text-sm truncate">未选择用户</div>
                     <div class="text-xs text-ink-400">个人记忆已开启</div>
                   </div>
                 </div>
-                <button onclick="showUserModal()" class="flex-shrink-0 text-xs px-2.5 py-1.5 text-warm-600 hover:text-white hover:bg-warm-500 border border-warm-300 hover:border-warm-500 rounded-lg font-medium transition">切换</button>
+                <button onclick="showUserModal()"
+                  class="flex-shrink-0 text-xs px-2.5 py-1.5 text-warm-600 hover:text-white hover:bg-warm-500 border border-warm-300 hover:border-warm-500 rounded-lg font-medium transition">切换</button>
               </div>
 
               <button onclick="newConversation()" type="button"
@@ -335,12 +687,14 @@
         <section class="col-span-12 lg:col-span-6 min-h-0 h-full flex flex-col gap-3">
 
           <!-- 视频通话区 -->
-          <div class="relative flex-[3] min-h-0 rounded-3xl overflow-hidden shadow-card" style="background: url('/static/digital-human-bg.png') center/cover no-repeat, linear-gradient(135deg, #F3E8CF, #E8D5A8);">
+          <div class="relative flex-[3] min-h-0 rounded-3xl overflow-hidden shadow-card"
+            style="background: url('/static/digital-human-bg.png') center/cover no-repeat, linear-gradient(135deg, #F3E8CF, #E8D5A8);">
             <!-- TalkingHead 3D 渲染容器：JS 会清空内部并注入 wrapper / breathingLight / avatarStatus -->
             <div id="digitalHumanArea" class="digital-human-container"></div>
 
             <!-- 左上：数字人名牌 -->
-            <div class="absolute top-4 left-4 flex items-center gap-2 bg-emerald-500 text-white rounded-full px-4 py-2 shadow-lg z-10">
+            <div
+              class="absolute top-4 left-4 flex items-center gap-2 bg-emerald-500 text-white rounded-full px-4 py-2 shadow-lg z-10">
               <span class="w-2 h-2 bg-white rounded-full animate-pulse"></span>
               <span class="font-medium">数字人 · <span id="botName">小雅</span></span>
             </div>
@@ -349,16 +703,13 @@
             <div class="absolute top-4 right-4 flex items-start gap-3 z-10">
               <div class="w-36 h-24 rounded-xl overflow-hidden shadow-lg border-2 border-white relative bg-ink-900">
                 <video id="camera" autoplay muted playsinline></video>
-                <div class="camera-hint absolute inset-0 flex items-center justify-center text-white text-xs pointer-events-none px-2 text-center" style="background: rgba(0,0,0,0.55);"></div>
+                <div
+                  class="camera-hint absolute inset-0 flex items-center justify-center text-white text-xs pointer-events-none px-2 text-center"
+                  style="background: rgba(0,0,0,0.55);"></div>
                 <div class="absolute bottom-1 left-1 bg-black/60 text-white text-xs rounded px-1.5 py-0.5">您</div>
               </div>
             </div>
 
-            <!-- 左下：通话计时 -->
-            <div class="absolute bottom-4 left-4 flex items-center gap-2 bg-black/50 backdrop-blur text-white rounded-full px-4 py-2 z-10">
-              <span class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-              <span id="callTimer" class="font-medium tabular-nums">通话中　00:00:00</span>
-            </div>
           </div>
 
           <!-- 当前对话气泡区 -->
@@ -395,7 +746,8 @@
             <div class="flex items-center gap-2 flex-1">
               <input id="messageInput" type="text" placeholder="或在此输入..."
                 class="flex-1 min-w-0 px-4 py-2 rounded-full border-2 border-cream-200 focus:border-warm-500 outline-none text-base text-ink-900" />
-              <button id="sendBtn" class="flex-shrink-0 px-5 py-2 bg-warm-500 hover:bg-warm-600 text-white rounded-full font-medium flex items-center gap-1.5">
+              <button id="sendBtn"
+                class="flex-shrink-0 px-5 py-2 bg-warm-500 hover:bg-warm-600 text-white rounded-full font-medium flex items-center gap-1.5">
                 <i data-lucide="send" style="width:18px;height:18px;"></i> 发送
               </button>
             </div>
@@ -412,28 +764,40 @@
               <h3 class="text-xl font-bold text-ink-900">快捷服务</h3>
             </div>
             <div class="grid grid-cols-3 gap-2">
-              <button onclick="sendQuickPhrase('今天有什么新闻？')" class="flex flex-col items-center gap-1.5 p-2 rounded-xl hover:bg-cream-50 border border-cream-100 transition">
-                <div class="w-11 h-11 rounded-xl bg-sky-100 flex items-center justify-center text-sky-600"><i data-lucide="newspaper" style="width:24px;height:24px;"></i></div>
+              <button onclick="sendQuickPhrase('今天有什么新闻？')"
+                class="flex flex-col items-center gap-1.5 p-2 rounded-xl hover:bg-cream-50 border border-cream-100 transition">
+                <div class="w-11 h-11 rounded-xl bg-sky-100 flex items-center justify-center text-sky-600"><i
+                    data-lucide="newspaper" style="width:24px;height:24px;"></i></div>
                 <span class="text-sm text-ink-900 font-medium">查询新闻</span>
               </button>
-              <button onclick="sendQuickPhrase('给我讲个笑话')" class="flex flex-col items-center gap-1.5 p-2 rounded-xl hover:bg-cream-50 border border-cream-100 transition">
-                <div class="w-11 h-11 rounded-xl bg-yellow-100 flex items-center justify-center text-yellow-600"><i data-lucide="smile" style="width:24px;height:24px;"></i></div>
+              <button onclick="sendQuickPhrase('给我讲个笑话')"
+                class="flex flex-col items-center gap-1.5 p-2 rounded-xl hover:bg-cream-50 border border-cream-100 transition">
+                <div class="w-11 h-11 rounded-xl bg-yellow-100 flex items-center justify-center text-yellow-600"><i
+                    data-lucide="smile" style="width:24px;height:24px;"></i></div>
                 <span class="text-sm text-ink-900 font-medium">讲笑话</span>
               </button>
-              <button onclick="sendQuickPhrase('今天有什么养生小知识？')" class="flex flex-col items-center gap-1.5 p-2 rounded-xl hover:bg-cream-50 border border-cream-100 transition">
-                <div class="w-11 h-11 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600"><i data-lucide="leaf" style="width:24px;height:24px;"></i></div>
+              <button onclick="sendQuickPhrase('今天有什么养生小知识？')"
+                class="flex flex-col items-center gap-1.5 p-2 rounded-xl hover:bg-cream-50 border border-cream-100 transition">
+                <div class="w-11 h-11 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600"><i
+                    data-lucide="leaf" style="width:24px;height:24px;"></i></div>
                 <span class="text-sm text-ink-900 font-medium">养生</span>
               </button>
-              <button onclick="sendQuickPhrase('给我讲个故事')" class="flex flex-col items-center gap-1.5 p-2 rounded-xl hover:bg-cream-50 border border-cream-100 transition">
-                <div class="w-11 h-11 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600"><i data-lucide="book-open" style="width:24px;height:24px;"></i></div>
+              <button onclick="sendQuickPhrase('给我讲个故事')"
+                class="flex flex-col items-center gap-1.5 p-2 rounded-xl hover:bg-cream-50 border border-cream-100 transition">
+                <div class="w-11 h-11 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600"><i
+                    data-lucide="book-open" style="width:24px;height:24px;"></i></div>
                 <span class="text-sm text-ink-900 font-medium">听故事</span>
               </button>
-              <button onclick="sendQuickPhrase('唱首歌给我听')" class="flex flex-col items-center gap-1.5 p-2 rounded-xl hover:bg-cream-50 border border-cream-100 transition">
-                <div class="w-11 h-11 rounded-xl bg-purple-100 flex items-center justify-center text-purple-600"><i data-lucide="music" style="width:24px;height:24px;"></i></div>
+              <button onclick="sendQuickPhrase('唱首歌给我听')"
+                class="flex flex-col items-center gap-1.5 p-2 rounded-xl hover:bg-cream-50 border border-cream-100 transition">
+                <div class="w-11 h-11 rounded-xl bg-purple-100 flex items-center justify-center text-purple-600"><i
+                    data-lucide="music" style="width:24px;height:24px;"></i></div>
                 <span class="text-sm text-ink-900 font-medium">听歌</span>
               </button>
-              <button onclick="sendQuickPhrase('我有点闷，陪我聊聊')" class="flex flex-col items-center gap-1.5 p-2 rounded-xl hover:bg-cream-50 border border-cream-100 transition">
-                <div class="w-11 h-11 rounded-xl bg-rose-100 flex items-center justify-center text-rose-600"><i data-lucide="message-circle" style="width:24px;height:24px;"></i></div>
+              <button onclick="sendQuickPhrase('我有点闷，陪我聊聊')"
+                class="flex flex-col items-center gap-1.5 p-2 rounded-xl hover:bg-cream-50 border border-cream-100 transition">
+                <div class="w-11 h-11 rounded-xl bg-rose-100 flex items-center justify-center text-rose-600"><i
+                    data-lucide="message-circle" style="width:24px;height:24px;"></i></div>
                 <span class="text-sm text-ink-900 font-medium">解闷</span>
               </button>
             </div>
@@ -454,7 +818,8 @@
           </div>
 
           <!-- 温馨提示 / 我的提醒 -->
-          <div class="flex-1 min-h-0 bg-gradient-to-br from-cream-100 to-cream-50 rounded-2xl shadow-card p-4 relative overflow-hidden flex flex-col">
+          <div
+            class="flex-1 min-h-0 bg-gradient-to-br from-cream-100 to-cream-50 rounded-2xl shadow-card p-4 relative overflow-hidden flex flex-col">
             <div class="flex items-center gap-2 mb-2">
               <i data-lucide="megaphone" class="text-warm-500" style="width:22px;height:22px;"></i>
               <h3 class="text-lg font-bold text-ink-900">温馨提示</h3>
@@ -465,7 +830,6 @@
             <!-- 兜底文案（没有提醒时显示） -->
             <p id="reminderEmptyHint" class="text-base leading-relaxed text-ink-700 pr-10">
               天气多变，注意增减衣物。记得按时喝水、按时吃药。<br>
-              <span class="text-sm text-ink-500">想加个提醒？试试对我说「下午三点提醒我吃药」～</span>
             </p>
           </div>
         </aside>
@@ -536,7 +900,7 @@
     }
   }
   </script>
-  <script type="module" src="/static/script.js?v=19"></script>
+  <script type="module" src="/static/script.js?v=20"></script>
 
   <script>
     // ---- Lucide 初始化 + 全局回调 ----
@@ -618,19 +982,23 @@
     }
 
     async function resolveCity() {
-      const cached = localStorage.getItem(CITY_KEY);
-      if (cached) {
-        console.log('[weather] 使用缓存城市', cached);
-        return cached;
-      }
+      // 每次优先尝试地理定位，定位成功则更新缓存；定位失败才回退到缓存
       const detected = await detectCityByGeolocation();
       if (detected) {
-        localStorage.setItem(CITY_KEY, detected);
-        // 异步定位完成后立刻通知后端，确保聊天天气查询也用正确城市
-        if (typeof wsSend === 'function') {
-          wsSend({ type: 'location', city: detected });
+        const cached = localStorage.getItem(CITY_KEY);
+        // 城市变化时才更新缓存并通知后端，确保聊天天气查询用正确城市
+        if (detected !== cached) {
+          localStorage.setItem(CITY_KEY, detected);
+          if (typeof wsSend === 'function') {
+            wsSend({ type: 'location', city: detected });
+          }
         }
         return detected;
+      }
+      const cached = localStorage.getItem(CITY_KEY);
+      if (cached) {
+        console.log('[weather] 定位失败，使用缓存城市', cached);
+        return cached;
       }
       console.warn('[weather] 未能自动定位，将使用后端默认城市；可点城市名手动设置');
       return null;

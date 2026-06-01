@@ -32,6 +32,7 @@ from llm import (
     commit_assistant_message,
     classify_interrupt_intent,
     build_followup_reply,
+    get_session_messages,
 )
 from user_profile import record_turn, delete_profile
 from asr import asr_engine  # 此时 asr.py 内部已改为加载 whisper-final-model
@@ -41,6 +42,8 @@ from tts import tts_engine, TTSGenerationError
 from faceformer_adapter import audio_bytes_to_user_emotion
 from tools import get_weather, get_calendar, get_news
 import reminders as reminders_mod
+import crisis as crisis_mod
+from contacts import build_contact_action
 
 app = FastAPI()
 
@@ -400,6 +403,7 @@ async def process_user_message(
     user_name: str = "",
     user_id: str = "",
     city: str = "",
+    crisis_mode: bool = False,
 ):
     chunk_queue = asyncio.Queue()
     sentinel = object()
@@ -534,7 +538,7 @@ async def process_user_message(
                     response_state.interrupted = True
                     break
         else:
-            async for char in llm_chat(user_text, emotion, session_id, user_name=user_name, avatar_id=avatar_id, user_id=user_id, city=city):
+            async for char in llm_chat(user_text, emotion, session_id, user_name=user_name, avatar_id=avatar_id, user_id=user_id, city=city, crisis_mode=crisis_mode):
                 if not is_current_response(response_state.response_id):
                     response_state.interrupted = True
                     break
@@ -683,10 +687,12 @@ async def websocket_chat(websocket: WebSocket):
     last_emotion_time = 0
     emotion_busy = False
 
+    session_risk = crisis_mod.SessionRiskState()
+
     def is_current_response(response_id: int) -> bool:
         return response_id == current_response_id
 
-    async def start_chat_task(user_text: str, preset_reply: str = None):
+    async def start_chat_task(user_text: str, preset_reply: str = None, crisis_mode: bool = False):
         nonlocal current_chat_task, current_response_id, active_response_state
 
         previous_state = active_response_state
@@ -722,6 +728,7 @@ async def websocket_chat(websocket: WebSocket):
                 user_name=current_user_name,
                 user_id=current_user_id,
                 city=current_city,
+                crisis_mode=crisis_mode,
             )
         )
 
@@ -734,7 +741,52 @@ async def websocket_chat(websocket: WebSocket):
         had_active_task = current_chat_task and not current_chat_task.done()
         preset_reply = None
 
-        # ── 提醒意图优先于一切（打断分类 / LLM）──
+        # ── 危机检测：优先运行，保证所有消息路径（包括提醒）都能触发 ────────────
+        if crisis_mod.keyword_pre_filter(user_text):
+            try:
+                _, ctx_messages = get_session_messages(current_session_id)
+                risk = await asyncio.wait_for(
+                    crisis_mod.classify_crisis_risk(user_text, list(ctx_messages)),
+                    timeout=3.0,
+                )
+            except asyncio.TimeoutError:
+                risk = {"level": "medium", "score": 0.5, "reason": "精判超时，关键词命中保守判定"}
+
+            level = risk["level"]
+            if level != "none":
+                session_risk.record(level)
+                crisis_mod.log_crisis_event(
+                    user_id=current_user_id,
+                    session_id=current_session_id,
+                    user_text=user_text,
+                    level=level,
+                    score=risk["score"],
+                    reason=risk["reason"],
+                    action="detect",
+                )
+                print(f"[crisis] level={level} score={risk['score']:.2f} reason={risk['reason']!r}")
+
+                if session_risk.needs_full_alert:
+                    session_risk.mark_alerted()
+                    contact_action = build_contact_action(current_user_id, "紧急联系家属", action="call")
+                    await safe_send(websocket, {
+                        "type": "crisis_alert",
+                        "level": level,
+                        "hotlines": crisis_mod.CRISIS_HOTLINES,
+                        "contactAction": contact_action,
+                    })
+                    crisis_mod.log_crisis_event(
+                        user_id=current_user_id,
+                        session_id=current_session_id,
+                        user_text=user_text,
+                        level=level,
+                        score=risk["score"],
+                        reason=risk["reason"],
+                        action="alert_sent",
+                    )
+        # ─────────────────────────────────────────────────────────────────────
+
+        # ── 提醒意图优先于对话路由 ──
         parsed = reminders_mod.try_parse_reminder(user_text)
         print(f"[reminder] user_text={user_text!r}  parsed={parsed}")
         if parsed:
@@ -750,7 +802,7 @@ async def websocket_chat(websocket: WebSocket):
                 content,
                 current_user_name,
             )
-            await start_chat_task(user_text, preset_reply=ack)
+            await start_chat_task(user_text, preset_reply=ack, crisis_mode=session_risk.caring_mode)
             return
 
         if had_active_task and previous_state:
@@ -777,7 +829,7 @@ async def websocket_chat(websocket: WebSocket):
                     previous_state.pending_text(),
                 )
 
-        await start_chat_task(user_text, preset_reply=preset_reply)
+        await start_chat_task(user_text, preset_reply=preset_reply, crisis_mode=session_risk.caring_mode)
 
     async def reminder_scanner():
         """每 5 秒扫一次提醒，到期就推前端 + 让数字人主动播报"""

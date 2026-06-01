@@ -11,16 +11,16 @@ const AVATARS = [
 ];
 
 const STATUS = {
-  online:    { key: 'online',        text: '👋 在线' },
-  thinking:  { key: 'thinking',      text: '🤔 思考中...' },
-  speaking:  { key: 'speaking',      text: '💬 正在说话' },
-  playAudio: { key: 'speaking',      text: '🔊 播放语音' },
-  listening: { key: 'listening',     text: '🎤 正在听您说话...' },
-  listenSay: { key: 'listening',     text: '🎤 我在听，您说' },
-  offline:   { key: 'offline',       text: '⚠️ 离线' },
-  offlineD:  { key: 'offline',       text: '⚠️ 连接断开' },
-  reconnect: { key: 'reconnecting',  text: '🔄 重连中...' },
-  genReply:  { key: 'thinking',      text: '⚡ 正在生成回复...' },
+  online: { key: 'online', text: '👋 在线' },
+  thinking: { key: 'thinking', text: '🤔 思考中...' },
+  speaking: { key: 'speaking', text: '💬 正在说话' },
+  playAudio: { key: 'speaking', text: '🔊 播放语音' },
+  listening: { key: 'listening', text: '🎤 正在听您说话...' },
+  listenSay: { key: 'listening', text: '🎤 我在听，您说' },
+  offline: { key: 'offline', text: '⚠️ 离线' },
+  offlineD: { key: 'offline', text: '⚠️ 连接断开' },
+  reconnect: { key: 'reconnecting', text: '🔄 重连中...' },
+  genReply: { key: 'thinking', text: '⚡ 正在生成回复...' },
 };
 
 const MAX_RECONNECT = 5;
@@ -73,7 +73,7 @@ function setStatus(s) {
 
 function getGreetingInfo() {
   const h = new Date().getHours();
-  if (h >= 5 && h < 9)  return { text: '早上好', icon: 'sunrise' };
+  if (h >= 5 && h < 9) return { text: '早上好', icon: 'sunrise' };
   if (h >= 9 && h < 12) return { text: '上午好', icon: 'sun' };
   if (h >= 12 && h < 14) return { text: '中午好', icon: 'sun' };
   if (h >= 14 && h < 18) return { text: '下午好', icon: 'cloud-sun' };
@@ -151,13 +151,13 @@ async function initHeadAudio() {
 function destroyHeadAudio() {
   if (_haRAF !== null) { cancelAnimationFrame(_haRAF); _haRAF = null; }
   if (headAudio && talkingHead) {
-    try { talkingHead.audioSpeechGainNode.disconnect(headAudio); } catch (_) {}
+    try { talkingHead.audioSpeechGainNode.disconnect(headAudio); } catch (_) { }
     try {
       if (_haDelayNode) {
         talkingHead.audioSpeechGainNode.disconnect(_haDelayNode);
         talkingHead.audioSpeechGainNode.connect(talkingHead.audioReverbNode);
       }
-    } catch (_) {}
+    } catch (_) { }
   }
   headAudio = null;
   _haDelayNode = null;
@@ -204,7 +204,7 @@ const AudioPlayer = {
     this._pending = [];
     this.playing = false;
     this.responseId = null;
-    if (talkingHead) { try { talkingHead.stopSpeaking(); } catch (_) {} }
+    if (talkingHead) { try { talkingHead.stopSpeaking(); } catch (_) { } }
   },
 };
 
@@ -279,11 +279,11 @@ function clearAvatarEmotion() {
 
 // ---------------------- Viseme / animation stubs ----------------------
 // TalkingHead handles lipsync and idle animation internally.
-function clearVisemeTimers() {}
-function setAvatarMouth(v) {}
-async function startMicLipSync() {}
-function stopMicLipSync() {}
-function refreshAvatarSize() {}
+function clearVisemeTimers() { }
+function setAvatarMouth(v) { }
+async function startMicLipSync() { }
+function stopMicLipSync() { }
+function refreshAvatarSize() { }
 
 // ---------------------- WebSocket ----------------------
 function wsSend(data) {
@@ -462,7 +462,7 @@ const Camera = {
         audio: false,
       });
       video.srcObject = this.stream;
-      video.play().catch(() => {});
+      video.play().catch(() => { });
       this._canvas = document.createElement('canvas');
       this._canvas.width = 320;
       this._canvas.height = 240;
@@ -482,7 +482,7 @@ const Camera = {
       try {
         this._ctx.drawImage(video, 0, 0, this._canvas.width, this._canvas.height);
         wsSend({ type: 'frame', data: this._canvas.toDataURL('image/jpeg', 0.6) });
-      } catch (_) {}
+      } catch (_) { }
     }, 1000);
   },
 
@@ -505,10 +505,9 @@ async function initAndLoadAvatar(avatar) {
   wrapper.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;overflow:hidden;';
   container.appendChild(wrapper);
 
-  // Status overlay elements on top
+  // Status overlay is hidden to remove online prompt.
   container.insertAdjacentHTML('beforeend', `
     <div id="breathingLight" class="breathing-light"></div>
-    <div id="avatarStatus" class="avatar-status"><span id="statusText">👋 在线</span></div>
   `);
 
   // Dynamic import so a CDN failure doesn't break page navigation
@@ -546,7 +545,7 @@ async function initAndLoadAvatar(avatar) {
 function destroyAvatar() {
   destroyHeadAudio();
   if (talkingHead) {
-    try { talkingHead.stopSpeaking(); } catch (_) {}
+    try { talkingHead.stopSpeaking(); } catch (_) { }
     talkingHead = null;
   }
 }
@@ -806,7 +805,7 @@ window.dismissReminder = dismissReminder;
 // =====================================================================
 // 用户系统（本地多用户，画像跨对话持久化）
 // =====================================================================
-const USERS_KEY    = 'warm-companion-users';
+const USERS_KEY = 'warm-companion-users';
 const CUR_USER_KEY = 'warm-companion-current-user';
 
 function loadUsers() {
@@ -825,7 +824,7 @@ function getCurrentUser() {
 
 function _applyUser(user) {
   if (!user) return;
-  state.userId   = user.id;
+  state.userId = user.id;
   state.userName = user.name;
   localStorage.setItem(CUR_USER_KEY, user.id);
 
@@ -833,15 +832,15 @@ function _applyUser(user) {
   if (dom.userDisplayName) dom.userDisplayName.textContent = user.name;
 
   // 侧边栏
-  const nameEl   = document.getElementById('currentUserDisplay');
+  const nameEl = document.getElementById('currentUserDisplay');
   const avatarEl = document.getElementById('currentUserAvatar');
-  if (nameEl)   nameEl.textContent   = user.name;
+  if (nameEl) nameEl.textContent = user.name;
   if (avatarEl) avatarEl.textContent = user.name.charAt(0);
 }
 
 function selectUser(userId) {
   const users = loadUsers();
-  const user  = users.find(u => u.id === userId);
+  const user = users.find(u => u.id === userId);
   if (!user) return;
   // 更新 lastActiveAt
   user.lastActiveAt = Date.now();
@@ -854,10 +853,10 @@ function selectUser(userId) {
 
 function confirmNewUser() {
   const input = document.getElementById('newUserNameInput');
-  const name  = (input ? input.value : '').trim();
+  const name = (input ? input.value : '').trim();
   if (!name) { showToast('请输入名字', 'warning'); return; }
 
-  const users  = loadUsers();
+  const users = loadUsers();
   const exists = users.find(u => u.name === name);
   if (exists) { selectUser(exists.id); if (input) input.value = ''; return; }
 
@@ -872,9 +871,9 @@ function confirmNewUser() {
   showToast(`欢迎，${name}！个人记忆已为您开启`, 'info');
 }
 
-window.deleteUser = function(userId) {
+window.deleteUser = function (userId) {
   const users = loadUsers();
-  const user  = users.find(u => u.id === userId);
+  const user = users.find(u => u.id === userId);
   if (!user) return;
   if (!confirm(`确定删除用户「${user.name}」及其所有记忆记录吗？`)) return;
   const newUsers = users.filter(u => u.id !== userId);
@@ -885,13 +884,13 @@ window.deleteUser = function(userId) {
     if (newUsers.length > 0) {
       _applyUser(newUsers[0]);
     } else {
-      state.userId   = '';
+      state.userId = '';
       state.userName = '';
       localStorage.removeItem(CUR_USER_KEY);
       if (dom.userDisplayName) dom.userDisplayName.textContent = '朋友';
-      const nameEl   = document.getElementById('currentUserDisplay');
+      const nameEl = document.getElementById('currentUserDisplay');
       const avatarEl = document.getElementById('currentUserAvatar');
-      if (nameEl)   nameEl.textContent   = '未选择用户';
+      if (nameEl) nameEl.textContent = '未选择用户';
       if (avatarEl) avatarEl.textContent = '?';
     }
   }
@@ -918,7 +917,7 @@ function renderSelectPageUserBar() {
     return;
   }
 
-  users.sort((a, b) => (b.lastActiveAt || 0) - (a.lastActiveAt || 0)).forEach(u => {
+  users.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)).forEach(u => {
     const btn = document.createElement('button');
     btn.className = 'user-chip ' + (u.id === state.userId ? 'selected' : 'unselected');
     btn.textContent = u.name;
@@ -983,8 +982,8 @@ function hideUserModal() {
 }
 
 function initUserSystem() {
-  const users  = loadUsers();
-  const curId  = localStorage.getItem(CUR_USER_KEY);
+  const users = loadUsers();
+  const curId = localStorage.getItem(CUR_USER_KEY);
   const oldName = localStorage.getItem('warm-companion-username');
 
   // 迁移旧版单用户名字到新用户系统
@@ -1067,9 +1066,9 @@ function stopVoiceUI() {
   const btn = document.getElementById('centerVoiceBtn');
   if (btn) btn.classList.remove('recording');
   const idle = document.getElementById('voiceIdleState');
-  const rec  = document.getElementById('voiceRecordingState');
+  const rec = document.getElementById('voiceRecordingState');
   if (idle) idle.classList.remove('hidden');
-  if (rec)  rec.classList.add('hidden');
+  if (rec) rec.classList.add('hidden');
   stopMicLipSync();
 }
 

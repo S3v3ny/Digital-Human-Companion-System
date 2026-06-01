@@ -49,3 +49,7 @@ desktop.ini
 *.swp
 
 session_memory.json
+demo/session_memory.json
+user_profiles.json
+demo/user_profiles.json
+demo/crisis_log.jsonl
