@@ -104,21 +104,29 @@ def get_session_messages(session_id):
 
 
 # --- 【3. 新增检索逻辑 (带线程池防阻塞)】 ---
+_RAG_DISTANCE_THRESHOLD = 0.8
+
 def _sync_retrieve(user_text: str, top_k: int = 2) -> str:
     """同步的检索核心逻辑"""
+    if len(user_text.strip()) < 5:
+        return ""
     try:
         # 1. 提问向量化
         query_embedding = embedder.encode([user_text]).tolist()
-        
+
         # 2. 向量库检索
         results = psy_collection.query(
             query_embeddings=query_embedding,
             n_results=top_k
         )
-        
-        # 3. 提取结果拼成字符串
-        retrieved_docs = results['documents'][0]
-        context = "\n\n".join([f"参考干预案例 {i+1}:\n{doc}" for i, doc in enumerate(retrieved_docs)])
+
+        # 3. 过滤低相关结果（距离阈值 0.8，超出则视为无关）
+        docs = results['documents'][0]
+        distances = results['distances'][0]
+        relevant = [(doc, dist) for doc, dist in zip(docs, distances) if dist < _RAG_DISTANCE_THRESHOLD]
+        if not relevant:
+            return ""
+        context = "\n\n".join([f"参考干预案例 {i+1}:\n{doc}" for i, (doc, _) in enumerate(relevant)])
         return context
     except Exception as e:
         print(f"知识库检索失败: {e}")
