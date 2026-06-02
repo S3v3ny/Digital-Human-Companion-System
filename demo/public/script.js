@@ -776,12 +776,16 @@ function destroyAvatar() {
 }
 
 // ---------------------- Session Manager ----------------------
+function getSessionsKey() {
+  return state.userId ? `chatbot-sessions-${state.userId}` : 'chatbot-sessions';
+}
+
 function loadSessions() {
-  try { state.sessions = JSON.parse(localStorage.getItem('chatbot-sessions') || '[]'); }
+  try { state.sessions = JSON.parse(localStorage.getItem(getSessionsKey()) || '[]'); }
   catch (_) { state.sessions = []; }
 }
 
-function saveSessions() { localStorage.setItem('chatbot-sessions', JSON.stringify(state.sessions)); }
+function saveSessions() { localStorage.setItem(getSessionsKey(), JSON.stringify(state.sessions)); }
 
 function getAvatarSessions() {
   return state.avatar ? state.sessions.filter(s => s.avatarId === state.avatar.id) : [];
@@ -1051,6 +1055,8 @@ function _applyUser(user) {
   if (!user) return;
   state.userId = user.id;
   state.userName = user.name;
+  state.sessions = [];
+  state.sessionId = null;
   localStorage.setItem(CUR_USER_KEY, user.id);
 
   // 顶栏问候
