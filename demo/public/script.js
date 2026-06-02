@@ -31,6 +31,8 @@ const state = {
   userId: '',   // 当前用户的稳定 ID（由前端生成，永久保存在 localStorage）
   ws: null, wsConnected: false, reconnects: 0,
   recording: false, recognition: null,
+  // 点击说话：已提交文本 / 当前实例文本 / 是否为用户主动结束
+  voiceFinalText: '', voiceSessionText: '', voiceStopping: false,
   responseId: null, botChunks: [],
   currentChunkEl: null,
   thinkingEl: null, pressTimer: null, isLongPress: false,
@@ -1042,23 +1044,48 @@ function createRecognitionInstance() {
     startMicLipSync();
   };
   rec.onresult = (e) => {
-    // 累积所有已识别片段，等待用户点击结束后发送
+    // 累积当前实例已识别片段，叠加之前实例提交的文本一起回填输入框
     let txt = '';
     for (let i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
-    dom.messageInput.value = txt;
+    state.voiceSessionText = txt;
+    dom.messageInput.value = state.voiceFinalText + txt;
   };
   rec.onerror = (e) => {
-    stopVoiceUI();
-    setStatus(STATUS.online);
-    if (e.error !== 'no-speech') showToast('语音识别失败，请重试', 'warning');
+    // 静音超时（no-speech）不算错误：交给 onend 自动续听，等待用户点击结束
+    if (e.error === 'no-speech') return;
+    // aborted 是我们主动 stop() 触发的，无需提示
+    if (e.error !== 'aborted') showToast('语音识别失败，请重试', 'warning');
+    state.voiceStopping = true; // 其它错误：结束本次说话
   };
   rec.onend = () => {
-    stopVoiceUI();
-    setStatus(STATUS.online);
-    // 结束后若有识别内容则发送
-    if (dom.messageInput.value.trim()) sendMessage();
+    // 把当前实例识别到的文本并入已提交文本
+    state.voiceFinalText += state.voiceSessionText;
+    state.voiceSessionText = '';
+    if (state.voiceStopping || !state.recording) {
+      // 用户主动点击结束（或已停止）：收尾并发送
+      finishVoiceRecording();
+    } else {
+      // 浏览器因静音自动结束，但用户还没点结束：续听
+      try {
+        state.recognition = createRecognitionInstance();
+        state.recognition.start();
+      } catch (_) {
+        finishVoiceRecording();
+      }
+    }
   };
   return rec;
+}
+
+// 收尾：还原 UI、发送累积文本
+function finishVoiceRecording() {
+  stopVoiceUI();
+  setStatus(STATUS.online);
+  const text = state.voiceFinalText.trim();
+  state.voiceFinalText = '';
+  state.voiceSessionText = '';
+  state.voiceStopping = false;
+  if (text) { dom.messageInput.value = text; sendMessage(); }
 }
 
 function stopVoiceUI() {
@@ -1088,13 +1115,30 @@ function startVoiceRecording() {
   if (btn)  btn.classList.add('recording');
   if (idle) idle.classList.add('hidden');
   if (rec)  { rec.classList.remove('hidden'); rec.classList.add('flex'); }
+  // 重置累积状态
+  state.voiceFinalText = '';
+  state.voiceSessionText = '';
+  state.voiceStopping = false;
   state.recognition = createRecognitionInstance();
-  try { state.recognition.start(); } catch (_) { showToast('语音识别暂时不可用', 'warning'); }
+  try {
+    state.recognition.start();
+  } catch (_) {
+    // 启动失败：还原 UI，避免按钮卡在“录音中”
+    stopVoiceUI();
+    showToast('语音识别暂时不可用', 'warning');
+  }
 }
 
 function stopVoiceRecording() {
+  // 标记为用户主动结束，停止识别后由 onend 收尾并发送
+  state.voiceStopping = true;
   stopVoiceUI();
-  if (state.recognition) { try { state.recognition.stop(); } catch (_) { stopVoiceUI(); } }
+  if (state.recognition) {
+    try { state.recognition.stop(); }
+    catch (_) { finishVoiceRecording(); }
+  } else {
+    finishVoiceRecording();
+  }
 }
 
 // ---------------------- Page Navigation ----------------------

@@ -803,18 +803,35 @@
             </div>
           </div>
 
-          <!-- 新闻卡（动态） -->
+          <!-- 天气卡（动态） -->
           <div class="flex-shrink-0 bg-gradient-to-br from-sky-50 to-cream-50 rounded-2xl shadow-card p-4">
-            <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center justify-between mb-2">
               <div class="flex items-center gap-2">
-                <i data-lucide="newspaper" class="text-sky-600" style="width:22px;height:22px;"></i>
-                <h3 class="text-xl font-bold text-ink-900">今日新闻</h3>
+                <i data-lucide="map-pin" class="text-ink-500" style="width:18px;height:18px;"></i>
+                <span id="weatherCity" class="text-base font-medium text-ink-700">--</span>
               </div>
-              <span class="text-sm text-ink-500" id="newsDate">今天</span>
+              <span class="text-sm text-ink-500" id="weatherDay">今天</span>
             </div>
-            <ul id="newsList" class="space-y-2.5">
-              <li class="text-base text-ink-500">加载中...</li>
-            </ul>
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="flex items-baseline gap-1">
+                  <span id="weatherTemp" class="text-5xl font-black text-ink-900 leading-none">--</span>
+                  <span class="text-xl font-medium text-ink-700">°C</span>
+                </div>
+                <div id="weatherText" class="text-base text-ink-700 mt-1">加载中...</div>
+                <div class="flex items-center gap-2 mt-1.5 text-sm text-ink-500">
+                  <i data-lucide="wind" style="width:14px;height:14px;"></i>
+                  <span id="weatherWind">--</span>
+                </div>
+                <div id="weatherAqi" class="mt-1.5 hidden items-center gap-1.5 bg-emerald-100 text-emerald-700 text-xs font-medium rounded-full px-2.5 py-0.5">
+                  <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                  <span id="weatherAqiText">--</span>
+                </div>
+              </div>
+              <div id="weatherIcon" class="text-amber-400">
+                <i data-lucide="cloud-sun" style="width:72px;height:72px;stroke-width:1.5;"></i>
+              </div>
+            </div>
           </div>
 
           <!-- 温馨提示 / 我的提醒 -->
@@ -923,7 +940,26 @@
       }, 1000);
     })();
 
-    // ---- 城市定位：仍保留，用于聊天里的天气查询（不再渲染天气卡）----
+    // ---- 天气卡：从 /api/weather 取实时数据，10 分钟刷新一次 ----
+    function pickWeatherIcon(text) {
+      const t = text || '';
+      if (/雷/.test(t))          return 'cloud-lightning';
+      if (/雪/.test(t))          return 'cloud-snow';
+      if (/雨/.test(t))          return 'cloud-rain';
+      if (/雾|霾|沙/.test(t))    return 'cloud-fog';
+      if (/阴/.test(t))          return 'cloud';
+      if (/云/.test(t))          return 'cloud-sun';
+      if (/晴/.test(t))          return 'sun';
+      return 'cloud-sun';
+    }
+    function aqiColor(category) {
+      if (!category) return 'emerald';
+      if (category.includes('优')) return 'emerald';
+      if (category.includes('良')) return 'lime';
+      if (category.includes('轻度')) return 'amber';
+      if (category.includes('中度')) return 'orange';
+      return 'red';
+    }
     const CITY_KEY = 'warm-companion-city';
 
     // 中国主要城市经纬度（地级市级别，~60 个常见城市）
@@ -993,6 +1029,9 @@
             wsSend({ type: 'location', city: detected });
           }
         }
+        // 立刻反映到天气卡 UI 上
+        const cityEl = document.getElementById('weatherCity');
+        if (cityEl) cityEl.textContent = detected;
         return detected;
       }
       const cached = localStorage.getItem(CITY_KEY);
@@ -1005,54 +1044,47 @@
     }
 
 
-    // ---- 新闻卡：从 /api/news 取热点新闻，10 分钟刷新一次 ----
-    function escapeHtml(s) {
-      return String(s || '').replace(/[&<>"']/g, c => (
-        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
-      ));
-    }
-    function renderNewsItems(titles) {
-      const list = document.getElementById('newsList');
-      if (!list) return;
-      if (!titles.length) {
-        list.innerHTML = '<li class="text-base text-ink-500">暂无新闻数据</li>';
-        return;
-      }
-      list.innerHTML = titles.slice(0, 4).map((title, i) => `
-        <li class="flex items-start gap-2">
-          <span class="flex-shrink-0 mt-0.5 w-5 h-5 rounded-full bg-sky-100 text-sky-600 text-xs font-bold flex items-center justify-center">${i + 1}</span>
-          <span class="text-base text-ink-800 leading-snug line-clamp-2">${escapeHtml(title)}</span>
-        </li>`).join('');
-    }
-    async function refreshNews() {
+    async function refreshWeather() {
       try {
-        const r = await fetch('/api/news');
+        const city = await resolveCity();
+        const url = city ? `/api/weather?city=${encodeURIComponent(city)}` : '/api/weather';
+        const r = await fetch(url);
         const d = await r.json();
-        const list = document.getElementById('newsList');
         if (!d || !d.ok) {
-          if (list) list.innerHTML = `<li class="text-base text-ink-500">${escapeHtml(d?.error || '暂无新闻数据')}</li>`;
+          document.getElementById('weatherText').textContent = d?.error || '暂无天气数据';
           return;
         }
-        let titles = [];
-        if (Array.isArray(d.articles)) {
-          titles = d.articles.map(a => a.title).filter(Boolean);
-        } else if (d.raw_text) {
-          // MCP 原始文本：按行拆分，过滤链接/分隔线等元信息行
-          titles = d.raw_text.split('\n')
-            .map(s => s.trim())
-            .filter(s => s && !/^(===|---|链接[:：]|http|搜索关键词[:：]|找到约|返回前)/.test(s));
+        document.getElementById('weatherCity').textContent = d.city || '--';
+        document.getElementById('weatherTemp').textContent = d.temp ?? '--';
+        document.getElementById('weatherText').textContent = d.text || '';
+        // 风：优先 风向+级别，没有就显示 风速 m/s
+        let windText = '';
+        if (d.wind_dir || d.wind_scale) {
+          windText = `${d.wind_dir || ''} ${d.wind_scale ? d.wind_scale + '级' : ''}`.trim();
+        } else if (d.wind_speed != null) {
+          windText = `风速 ${d.wind_speed} 米/秒`;
         }
-        renderNewsItems(titles);
+        document.getElementById('weatherWind').textContent = windText || '--';
+        // 图标按天气文本切换
+        const iconBox = document.getElementById('weatherIcon');
+        iconBox.innerHTML = `<i data-lucide="${pickWeatherIcon(d.text)}" style="width:72px;height:72px;stroke-width:1.5;"></i>`;
+        // 空气质量
+        const aqiBox = document.getElementById('weatherAqi');
+        if (d.aqi && d.aqi.category) {
+          aqiBox.classList.remove('hidden');
+          aqiBox.classList.add('inline-flex');
+          document.getElementById('weatherAqiText').textContent = `空气${d.aqi.category} · ${d.aqi.aqi}`;
+        } else {
+          aqiBox.classList.add('hidden');
+        }
+        refreshIcons();
       } catch (e) {
-        console.warn('[news] 获取失败', e);
+        console.warn('[weather] 获取失败', e);
       }
     }
     // 启动后立即拉一次，10 分钟刷新一次
-    document.addEventListener('DOMContentLoaded', refreshNews);
-    setInterval(refreshNews, 600000);
-
-    // 城市定位仅用于聊天天气查询：定位完成后会通过 wsSend 通知后端
-    document.addEventListener('DOMContentLoaded', () => { resolveCity(); });
+    document.addEventListener('DOMContentLoaded', refreshWeather);
+    setInterval(refreshWeather, 600000);
 
     // ---- 日历：每分钟更新一次右侧"今天 周X"小标 ----
     async function refreshCalendar() {
@@ -1060,7 +1092,7 @@
         const r = await fetch('/api/calendar');
         const d = await r.json();
         if (!d || !d.ok) return;
-        const day = document.getElementById('newsDate');
+        const day = document.getElementById('weatherDay');
         if (day) day.textContent = `今天 ${d.weekday}`;
       } catch (e) { /* ignore */ }
     }
