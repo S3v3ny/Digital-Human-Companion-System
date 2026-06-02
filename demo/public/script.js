@@ -147,6 +147,10 @@ async function initHeadAudio() {
     console.log('[HeadAudio] real-time lipsync ready');
   } catch (e) {
     console.warn('[HeadAudio] init failed (falling back to timestamp lipsync):', e);
+    // Reset so AudioPlayer._flush() takes the Azure-viseme fallback path.
+    if (_haRAF !== null) { cancelAnimationFrame(_haRAF); _haRAF = null; }
+    headAudio = null;
+    _haDelayNode = null;
   }
 }
 
@@ -163,6 +167,142 @@ function destroyHeadAudio() {
   }
   headAudio = null;
   _haDelayNode = null;
+}
+
+// ---------------------- Amplitude-driven jaw ----------------------
+// jawOpen follows the live speech energy (RMS of the audio analyser) instead of
+// per-phoneme viseme keyframes. The energy envelope is smooth and always in
+// sync with the sound, which removes the jittery "chattering" look. Viseme
+// keyframes still shape the lips (funnel / pucker / smile / ...).
+let _jawRAF = null;
+let _jawBuf = null;
+let _jawValue = 0;
+
+// Tunables: raise GAIN/MAX for a more open mouth; lower RELEASE for a snappier
+// close. Setting mtAvatar.jawOpen.newvalue applies directly (TalkingHead skips
+// its own velocity smoothing for newvalue), so these are the only smoothing.
+const _JAW = { gain: 2.2, max: 0.48, noise: 0.03, attack: 0.22, release: 0.10 };
+
+function initAmplitudeJaw() {
+  if (!talkingHead?.audioAnalyzerNode) return;
+  stopAmplitudeJaw();
+  const analyser = talkingHead.audioAnalyzerNode;
+  _jawBuf = new Uint8Array(analyser.fftSize);
+  _jawValue = 0;
+
+  function loop() {
+    _jawRAF = requestAnimationFrame(loop);
+    const jaw = talkingHead?.mtAvatar?.jawOpen;
+    if (!jaw) return;
+
+    let target = 0;
+    if (talkingHead.isSpeaking) {
+      analyser.getByteTimeDomainData(_jawBuf);
+      let sum = 0;
+      for (let i = 0; i < _jawBuf.length; i++) {
+        const v = (_jawBuf[i] - 128) / 128;
+        sum += v * v;
+      }
+      const rms = Math.sqrt(sum / _jawBuf.length);
+      target = rms > _JAW.noise ? Math.min(_JAW.max, rms * _JAW.gain) : 0;
+    }
+    // While speaking (or during the release tail) own the jaw; once settled and
+    // idle, stop writing so mood/baseline animation can manage it again.
+    if (talkingHead.isSpeaking || _jawValue > 0.003) {
+      const k = target > _jawValue ? _JAW.attack : _JAW.release;
+      _jawValue += (target - _jawValue) * k;
+      Object.assign(jaw, { newvalue: _jawValue, needsUpdate: true });
+    }
+  }
+  loop();
+  console.log('[Jaw] amplitude-driven jaw ready');
+}
+
+function stopAmplitudeJaw() {
+  if (_jawRAF !== null) { cancelAnimationFrame(_jawRAF); _jawRAF = null; }
+  if (talkingHead?.mtAvatar?.jawOpen) {
+    Object.assign(talkingHead.mtAvatar.jawOpen, { newvalue: 0, needsUpdate: true });
+  }
+  _jawValue = 0;
+  _jawBuf = null;
+}
+
+// ---------------------- Azure viseme → ARKit blendshape lipsync ----------------------
+// The shipped head models (3d卡通*.glb) expose only the 52 ARKit blendshapes
+// (jawOpen / mouthFunnel / mouthPucker / ...) and NOT the Oculus `viseme_*`
+// morph targets that TalkingHead's built-in lipsync (and HeadAudio) drive. So
+// we map Azure/edge-tts viseme_id (0-21) directly onto ARKit morphs the models
+// actually have, then animate them in sync with the audio.
+// NOTE: jaw opening (jawOpen) is intentionally NOT listed here — it is driven
+// separately by the live audio amplitude (see initAmplitudeJaw), which is far
+// smoother than per-phoneme keyframes. These poses only shape the *lips*.
+const _VISEME_ARKIT_POSE = {
+  0:  {},                                                                      // sil
+  1:  { mouthLowerDownLeft: 0.12, mouthLowerDownRight: 0.12 },                  // aa (æ/ə/ʌ)
+  2:  { mouthLowerDownLeft: 0.12, mouthLowerDownRight: 0.12 },                  // aa (ɑ)
+  3:  { mouthFunnel: 0.34, mouthPucker: 0.18 },                                 // O (ɔ)
+  4:  { mouthStretchLeft: 0.18, mouthStretchRight: 0.18 },                      // E
+  5:  { mouthPucker: 0.26 },                                                    // er
+  6:  { mouthSmileLeft: 0.26, mouthSmileRight: 0.26 },                          // I
+  7:  { mouthPucker: 0.52, mouthFunnel: 0.26 },                                 // U/w
+  8:  { mouthFunnel: 0.38, mouthPucker: 0.22 },                                 // O (o)
+  9:  {},                                                                       // aʊ
+  10: { mouthFunnel: 0.34, mouthPucker: 0.26 },                                 // ɔɪ
+  11: {},                                                                       // aɪ
+  12: {},                                                                       // h
+  13: { mouthPucker: 0.26 },                                                    // ɹ
+  14: { tongueOut: 0.08 },                                                      // l
+  15: { mouthStretchLeft: 0.20, mouthStretchRight: 0.20 },                      // s/z
+  16: { mouthFunnel: 0.30, mouthPucker: 0.30 },                                 // ʃ/tʃ/dʒ
+  17: { tongueOut: 0.18 },                                                      // ð/θ
+  18: { mouthRollLower: 0.34, mouthLowerDownLeft: 0.16, mouthLowerDownRight: 0.16 }, // f/v
+  19: {},                                                                       // d/t/n
+  20: {},                                                                       // k/g
+  21: { mouthClose: 0.55, mouthPucker: 0.12 },                                  // p/b/m (lips meet)
+};
+
+// Build a TalkingHead anim array (ARKit morph keyframes) from Azure visemes
+// [{time_ms, viseme_id}]. Times are relative to the start of this audio chunk;
+// TalkingHead rescales them against its anim clock when the chunk plays.
+//
+// One *continuous* keyframe track is emitted per morph (instead of an isolated
+// attack→peak→release per viseme) so the mouth glides smoothly between shapes
+// rather than snapping back to neutral after every phoneme — the latter looks
+// like mechanical chattering. TalkingHead interpolates between successive
+// keyframes, giving natural coarticulation.
+const _LIP_GAIN = 1.0; // global mouth-openness scale (tweak if too strong/weak)
+
+function buildArkitLipsyncAnim(visemes) {
+  if (!Array.isArray(visemes) || visemes.length === 0) return null;
+
+  // One target pose per viseme, anchored at its onset time.
+  const frames = [];
+  for (let i = 0; i < visemes.length; i++) {
+    const pose = _VISEME_ARKIT_POSE[visemes[i].viseme_id];
+    if (!pose) continue;
+    frames.push({ t: Number(visemes[i].time_ms) || 0, pose });
+  }
+  if (frames.length === 0) return null;
+  frames.sort((a, b) => a.t - b.t);
+
+  // Union of every morph touched this utterance.
+  const morphs = new Set();
+  frames.forEach(f => { for (const m in f.pose) morphs.add(m); });
+  if (morphs.size === 0) return null;
+
+  // Slight lead-in (open from rest before audio) and a tail that closes the
+  // mouth. A negative lead is fine: TalkingHead delays audio start to match.
+  const lead = frames[0].t - 60;
+  const tail = frames[frames.length - 1].t + 130;
+  const ts = [lead, ...frames.map(f => f.t), tail];
+
+  const anim = [];
+  morphs.forEach(morph => {
+    // null start → ease from the morph's current value (no jump on first frame).
+    const vs = [null, ...frames.map(f => (f.pose[morph] || 0) * _LIP_GAIN), 0];
+    anim.push({ template: { name: 'viseme' }, ts: ts.slice(), vs: { [morph]: vs } });
+  });
+  return anim.length ? anim : null;
 }
 
 // ---------------------- AudioPlayer (TalkingHead-backed) ----------------------
@@ -191,14 +331,27 @@ const AudioPlayer = {
   _flush() {
     if (!talkingHead) { this._pending = []; return; }
     // Process only front-of-queue items that are ready (preserve order).
-    // Visemes are intentionally omitted — HeadAudio drives lipsync in real-time
-    // by analysing the audio signal directly, which is more accurate than
-    // Azure's pre-computed timestamps.
+    // When HeadAudio's real-time analyser is active it drives lipsync from the
+    // audio signal directly, so visemes are omitted. If HeadAudio failed to
+    // initialise (e.g. model-en-mixed.bin missing), fall back to the Azure
+    // viseme timestamps the backend already sends so the mouth still moves.
     while (this._pending.length > 0 && this._pending[0].ready) {
-      const { buffer } = this._pending.shift();
+      const { buffer, visemes } = this._pending.shift();
       if (!buffer) continue;
       this.playing = true;
-      talkingHead.speakAudio({ audio: buffer });
+
+      // When HeadAudio's real-time analyser isn't driving lipsync, build an
+      // ARKit-morph animation from the Azure visemes and push it alongside the
+      // audio. This mirrors speakAudio()'s own {audio, anim} → speechQueue flow
+      // but uses morph names the shipped models actually have.
+      const anim = headAudio ? null : buildArkitLipsyncAnim(visemes);
+      if (anim) {
+        talkingHead.speechQueue.push({ audio: buffer, anim });
+        talkingHead.speechQueue.push({ break: 300 });
+        talkingHead.startSpeaking();
+      } else {
+        talkingHead.speakAudio({ audio: buffer });
+      }
     }
   },
 
@@ -542,9 +695,12 @@ async function initAndLoadAvatar(avatar) {
 
   // Wire up real-time audio-driven lipsync via HeadAudio
   await initHeadAudio();
+  // Drive jaw openness from live audio energy (smooth, jitter-free)
+  initAmplitudeJaw();
 }
 
 function destroyAvatar() {
+  stopAmplitudeJaw();
   destroyHeadAudio();
   if (talkingHead) {
     try { talkingHead.stopSpeaking(); } catch (_) { }
