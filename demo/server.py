@@ -784,6 +784,8 @@ async def websocket_chat(websocket: WebSocket):
                         reason=risk["reason"],
                         action="alert_sent",
                     )
+                    # 触发预警时用固定播报文本替换 preset_reply，确保热线号码被语音播出
+                    preset_reply = crisis_mod.build_crisis_alert_reply()
         # ─────────────────────────────────────────────────────────────────────
 
         # ── 提醒意图优先于对话路由 ──
@@ -909,6 +911,9 @@ async def websocket_chat(websocket: WebSocket):
                         "type": "reminder_list",
                         "reminders": [r.to_dict() for r in reminders_mod.list_active()],
                     })
+
+                if msg_type in ("new_session", "switch_session"):
+                    session_risk = crisis_mod.SessionRiskState()
 
                 incoming_name = (payload.get("userName") or "").strip()
                 if incoming_name:

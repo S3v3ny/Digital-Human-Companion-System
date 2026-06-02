@@ -557,7 +557,74 @@ const msgHandlers = {
     if (r) { r.fired = true; } else { state.reminders.push({ ...d.reminder, fired: true }); }
     renderReminders();
   },
+  crisis_alert(d) {
+    showCrisisBanner(d.hotlines || []);
+  },
 };
+
+function showCrisisBanner(hotlines) {
+  const existing = document.getElementById('crisisBanner');
+  if (existing) existing.remove();
+
+  const banner = document.createElement('div');
+  banner.id = 'crisisBanner';
+  banner.style.cssText = [
+    'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:9999',
+    'background:#fff1f2', 'border-bottom:2px solid #fca5a5',
+    'padding:12px 16px', 'display:flex', 'align-items:flex-start',
+    'gap:10px', 'box-shadow:0 2px 8px rgba(0,0,0,0.12)',
+  ].join(';');
+
+  const icon = document.createElement('span');
+  icon.textContent = '🆘';
+  icon.style.cssText = 'font-size:20px;flex-shrink:0;margin-top:2px;';
+
+  const body = document.createElement('div');
+  body.style.cssText = 'flex:1;min-width:0;';
+
+  const title = document.createElement('div');
+  title.style.cssText = 'font-size:15px;font-weight:700;color:#b91c1c;margin-bottom:6px;';
+  title.textContent = '如果您需要帮助，请随时拨打以下热线';
+
+  const list = document.createElement('div');
+  list.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;';
+  (hotlines.length ? hotlines : [{ name: '全国统一心理援助热线', phone: '12356', note: '24小时' }]).forEach(h => {
+    const chip = document.createElement('a');
+    chip.href = `tel:${h.phone}`;
+    chip.style.cssText = [
+      'display:inline-flex', 'align-items:center', 'gap:4px',
+      'background:#fee2e2', 'border:1px solid #fca5a5', 'border-radius:20px',
+      'padding:4px 12px', 'font-size:14px', 'color:#991b1b',
+      'text-decoration:none', 'font-weight:600',
+    ].join(';');
+    chip.textContent = `📞 ${h.name} ${h.phone}`;
+    if (h.note) {
+      const note = document.createElement('span');
+      note.style.cssText = 'font-size:11px;font-weight:400;color:#b91c1c;';
+      note.textContent = h.note;
+      chip.appendChild(note);
+    }
+    list.appendChild(chip);
+  });
+
+  body.appendChild(title);
+  body.appendChild(list);
+
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.style.cssText = [
+    'flex-shrink:0', 'background:none', 'border:none', 'cursor:pointer',
+    'font-size:20px', 'color:#b91c1c', 'padding:0 4px', 'line-height:1',
+  ].join(';');
+  closeBtn.textContent = '×';
+  closeBtn.setAttribute('aria-label', '关闭');
+  closeBtn.onclick = () => banner.remove();
+
+  banner.appendChild(icon);
+  banner.appendChild(body);
+  banner.appendChild(closeBtn);
+  document.body.prepend(banner);
+}
 
 function handleServerMessage(data) {
   if (!data || !data.type) return;

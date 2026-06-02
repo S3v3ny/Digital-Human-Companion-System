@@ -15,6 +15,7 @@ API_KEY = os.getenv("API_KEY")
 
 from tools import detect_tool, call_tool
 from user_profile import build_profile_context, set_preferred_name
+from crisis import CRISIS_HOTLINES
 
 
 MEMORY_FILE = Path(__file__).resolve().parent / "session_memory.json"
@@ -317,24 +318,29 @@ _CRISIS_PROMPT_HEADER = (
     "        # 当前模式：心理危机陪伴\n"
     "        你现在进入【心理危机陪伴模式】。用户可能表达了轻生、不想活或对生命失去希望的想法。\n"
 )
-_CRISIS_PROMPT_BODY = (
-    "        # 首要任务（按优先级排列）\n"
-    "        1. 让用户感到被倾听、被理解、不孤单——先共情，再一切。\n"
-    '        2. 不评判、不说教、不急于解决问题，不说"想开点""会好的"。\n'
-    "        3. 温和询问用户此刻的状态，鼓励继续表达内心感受。\n"
-    "        4. 在对话中自然地、不强迫地提到可以拨打的援助热线：\n"
-    "           全国心理援助热线 400-161-9995（24小时）或 北京心理危机干预中心 010-82951332。\n"
-    "        5. 如果用户愿意，轻柔鼓励联系家人或身边信任的人。\n"
-    "\n"
-    "        # 绝对禁止\n"
-    "        - 不要突然结束对话，要持续陪伴。\n"
-    '        - 不要轻描淡写（"这点事不值得想太多"）。\n'
-    "        - 不要一次性推出太多建议，保持对话节奏，每次只说一件事。\n"
-    "        - 不要在括号里写旁白或情绪描述，输出会直接被 TTS 朗读。\n"
-    "\n"
-    "        # 输出格式\n"
-    "        2-4 个短句，每句 15-40 字，口语化，语气温暖沉稳。\n"
-)
+
+
+def build_crisis_prompt_body() -> str:
+    hotline_lines = "、".join(
+        f"{h['name']} {h['phone']}（{h['note']}）" for h in CRISIS_HOTLINES[:2]
+    )
+    return (
+        "        # 首要任务（按优先级排列）\n"
+        "        1. 让用户感到被倾听、被理解、不孤单——先共情，再一切。\n"
+        '        2. 不评判、不说教、不急于解决问题，不说"想开点""会好的"。\n'
+        "        3. 温和询问用户此刻的状态，鼓励继续表达内心感受。\n"
+        f"        4. 在对话中自然地、不强迫地提到可以拨打的援助热线：{hotline_lines}。\n"
+        "        5. 如果用户愿意，轻柔鼓励联系家人或身边信任的人。\n"
+        "\n"
+        "        # 绝对禁止\n"
+        "        - 不要突然结束对话，要持续陪伴。\n"
+        '        - 不要轻描淡写（"这点事不值得想太多"）。\n'
+        "        - 不要一次性推出太多建议，保持对话节奏，每次只说一件事。\n"
+        "        - 不要在括号里写旁白或情绪描述，输出会直接被 TTS 朗读。\n"
+        "\n"
+        "        # 输出格式\n"
+        "        2-4 个短句，每句 15-40 字，口语化，语气温暖沉稳。\n"
+    )
 
 
 async def llm_chat(user_text, emotion, session_id, user_name: str = "", avatar_id: int = 1, user_id: str = "", city: str = "", crisis_mode: bool = False):
@@ -413,7 +419,7 @@ async def llm_chat(user_text, emotion, session_id, user_name: str = "", avatar_i
         {tool_context}
         """
     elif crisis_mode:
-        system_prompt = _CRISIS_PROMPT_HEADER + persona_block + address_block + profile_block + _CRISIS_PROMPT_BODY
+        system_prompt = _CRISIS_PROMPT_HEADER + persona_block + address_block + profile_block + build_crisis_prompt_body()
     else:
         system_prompt = f"""
         # Role

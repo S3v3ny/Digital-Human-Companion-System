@@ -42,15 +42,16 @@ _CRISIS_KEYWORDS = [
 
 # 第三方讨论/新闻/文学语境排除词，避免"听说有人自杀"误触发
 _EXCLUSION_PHRASES = [
-    "新闻", "报道", "电影", "小说", "历史", "别人", "他说", "她说",
-    "朋友", "邻居", "听说", "看到", "读到",
+    "新闻", "报道", "电影", "小说", "历史",
+    "他说", "她说", "听说", "看到", "读到",
 ]
 
 # 对外暴露的危机热线列表（推送给前端展示）
 CRISIS_HOTLINES = [
-    {"name": "全国心理援助热线", "phone": "400-161-9995", "note": "24小时"},
+    {"name": "全国统一心理援助热线", "phone": "12356", "note": "24小时"},
     {"name": "北京心理危机干预中心", "phone": "010-82951332", "note": "24小时"},
     {"name": "生命热线", "phone": "400-821-1215", "note": "24小时"},
+    {"name": "中国心理危机与自杀干预中心", "phone": "010-62715275", "note": "24小时"},
 ]
 
 
@@ -134,13 +135,16 @@ async def classify_crisis_risk(user_text: str, context_messages: list) -> dict:
 
 
 # ── 会话风险状态机 ────────────────────────────────────────────────────────────
+_ALERT_COOLDOWN = 1800  # 30 分钟后允许再次触发完整预警
+
+
 class SessionRiskState:
     """跟踪单次 WebSocket 会话内的累积风险信号。"""
 
     def __init__(self):
         self.medium_count: int = 0
         self.high_count: int = 0
-        self.full_alert_sent: bool = False
+        self.last_alert_ts: float = 0.0
 
     def record(self, level: str) -> None:
         if level == "medium":
@@ -155,12 +159,24 @@ class SessionRiskState:
 
     @property
     def needs_full_alert(self) -> bool:
-        """高风险单次，或中等风险累积 2 次，且尚未发过完整预警。"""
+        """高风险单次，或中等风险累积 2 次；冷却 30 分钟后可再次触发。"""
         triggered = self.high_count >= 1 or self.medium_count >= 2
-        return triggered and not self.full_alert_sent
+        cooled = (time.time() - self.last_alert_ts) >= _ALERT_COOLDOWN
+        return triggered and cooled
 
     def mark_alerted(self) -> None:
-        self.full_alert_sent = True
+        self.last_alert_ts = time.time()
+
+
+# ── 危机预警播报文本 ──────────────────────────────────────────────────────────
+def build_crisis_alert_reply() -> str:
+    """生成数字人在 crisis_alert 触发时主动播报的文本：关怀句 + 热线号码。"""
+    primary = CRISIS_HOTLINES[0]
+    lines = [
+        f"我一直在您身边，您不是一个人。",
+        f"您也可以随时拨打{primary['name']} {primary['phone']}，{primary['note']}都有专业的人在等待接听。",
+    ]
+    return "".join(lines)
 
 
 # ── 审计日志 ──────────────────────────────────────────────────────────────────
