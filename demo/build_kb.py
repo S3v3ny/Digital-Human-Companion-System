@@ -78,7 +78,7 @@ def ingest_data():
 
     print("正在将向量写入 ChromaDB...")
 
-    batch_size = client.max_batch_size
+    batch_size = client.get_max_batch_size()
     total = len(documents)
 
     for i in range(0, total, batch_size):
