@@ -78,23 +78,20 @@ def ingest_data():
 
     print("正在将向量写入 ChromaDB...")
 
-    # 分批写入，解决 ChromaDB 批次大小限制
-    batch_size = 40000  # 安全值，低于上限 41666
+    batch_size = client.max_batch_size
     total = len(documents)
 
     for i in range(0, total, batch_size):
-        # 截取当前批次数据
         batch_embeddings = embeddings[i:i+batch_size]
         batch_documents = documents[i:i+batch_size]
         batch_ids = ids[i:i+batch_size]
-        
-        # 写入数据库
+
         collection.add(
             embeddings=batch_embeddings,
             documents=batch_documents,
             ids=batch_ids
         )
-        print(f"✅ 已写入 {min(i+batch_size, total)} / {total} 条数据")
+        print(f"已写入 {min(i+batch_size, total)} / {total} 条数据")
 
     print("🎉 真实数据入库完成！")
 
