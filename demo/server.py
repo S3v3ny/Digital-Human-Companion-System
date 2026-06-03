@@ -1012,6 +1012,34 @@ async def websocket_chat(websocket: WebSocket):
                 continue
 
             # -------------------------
+            # 仅情感识别：前端用浏览器语音识别出文本，另把原始音频发来做 SER，
+            # 后端只跑语音情感识别并回推 user_emotion（不触发回复），
+            # 让数字人在 LLM 思考间隙做出与用户语音对应的共情表情。
+            # -------------------------
+            if msg_type == "audio_emotion":
+                try:
+                    audio_data = payload.get("data")
+                    if isinstance(audio_data, list) and audio_data:
+                        audio_bytes = pcm_list_to_wav_bytes(audio_data)
+                    elif isinstance(audio_data, str) and audio_data.startswith("data:audio"):
+                        audio_bytes = base64.b64decode(audio_data.split(",")[1])
+                    else:
+                        continue
+
+                    loop = asyncio.get_running_loop()
+                    user_emotion_label = await loop.run_in_executor(
+                        None, audio_bytes_to_user_emotion, audio_bytes
+                    )
+                    if user_emotion_label:
+                        await safe_send(websocket, {
+                            "type": "user_emotion",
+                            "emotion": user_emotion_label,
+                        })
+                except Exception as e:
+                    print("[SER] audio_emotion 处理失败:", e)
+                continue
+
+            # -------------------------
             # 音频消息
             # 正确用法：用户说话的音频 → audio2face_model → 数字人聆听表情
             # -------------------------

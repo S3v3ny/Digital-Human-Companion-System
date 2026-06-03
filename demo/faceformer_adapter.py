@@ -29,7 +29,16 @@ FPS = 25
 SR  = 16000
 HOP = SR // FPS          # 640 samples/frame @ 25fps
 
-SER_MODEL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "ser-model")
+# 共情表情：SER 常把语音判为 neutral，这里做去偏置——
+# 主情感为 neutral 时，只要有非中性情感达到此阈值就优先采用它（可调）。
+NON_NEUTRAL_THRESHOLD = float(os.environ.get("SER_NON_NEUTRAL_THRESHOLD", "0.20"))
+
+# SER 模型路径：默认用本地 models/ser-model，也可用环境变量 SER_MODEL 指向
+# 本地其它目录，或直接填 HuggingFace 模型名（首次会自动下载），方便换 7 情绪模型。
+SER_MODEL = os.environ.get(
+    "SER_MODEL",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "ser-model"),
+)
 
 # ── SER 模型懒加载 ─────────────────────────────────────────────────────────────
 _ser_pipeline = None
@@ -119,21 +128,30 @@ EMOTION_BLENDSHAPES = {
     },
 }
 
-# 模型标签别名归一化（不同数据集标签名称不统一）
+# 模型标签别名归一化（不同数据集标签名称/语言不统一，英文+中文都兼容）
 _LABEL_ALIASES = {
-    "ang": "angry",    "anger": "angry",
-    "hap": "happy",    "happiness": "happy",   "exc": "excited",
+    # 英文
+    "ang": "angry",    "anger": "angry",       "angry": "angry",
+    "hap": "happy",    "happiness": "happy",   "happy": "happy",   "joy": "happy", "exc": "excited", "excited": "excited",
     "sad": "sad",      "sadness": "sad",
-    "neu": "neutral",  "neutrality": "neutral", "normal": "neutral",
-    "sur": "surprise", "surprised": "surprise",
-    "fea": "fear",     "fearful": "fear",
-    "dis": "disgust",
+    "neu": "neutral",  "neutrality": "neutral", "normal": "neutral", "calm": "neutral", "neutral": "neutral",
+    "sur": "surprise", "surprised": "surprise", "surprise": "surprise",
+    "fea": "fear",     "fearful": "fear",       "fear": "fear",
+    "dis": "disgust",  "disgust": "disgust",
     "bor": "bored",
     "fru": "frustrated",
+    # 中文（部分中文 SER 模型直接输出中文标签）
+    "生气": "angry", "愤怒": "angry", "怒": "angry",
+    "高兴": "happy", "开心": "happy", "快乐": "happy", "喜悦": "happy",
+    "伤心": "sad", "难过": "sad", "悲伤": "sad", "沮丧": "sad",
+    "中性": "neutral", "平静": "neutral", "正常": "neutral",
+    "惊讶": "surprise", "惊喜": "surprise", "吃惊": "surprise",
+    "害怕": "fear", "恐惧": "fear",
+    "厌恶": "disgust", "反感": "disgust",
 }
 
 def _normalize_label(label: str) -> str:
-    label = label.lower().strip()
+    label = str(label).lower().strip()
     return _LABEL_ALIASES.get(label, label)
 
 
@@ -280,12 +298,34 @@ def audio_bytes_to_user_emotion(audio_bytes: bytes):
     """仅返回 SER 主情感标签（归一化后），用于陪伴式共情表情。"""
     try:
         audio_data = _decode_audio(audio_bytes)
+        # 诊断：音频时长 / 响度（RMS）。rms 接近 0 说明前端采集到的是静音
+        n = int(audio_data.size)
+        dur = n / SR if n else 0.0
+        rms = float(np.sqrt(np.mean(audio_data ** 2))) if n else 0.0
+        print(f"[SER] 收到音频 dur={dur:.2f}s rms={rms:.4f} samples={n}")
+
         pipe = _get_ser_pipeline()
         results = pipe({"raw": audio_data, "sampling_rate": SR}, top_k=None)
-        dominant = max(results, key=lambda r: r["score"])
-        label = _normalize_label(dominant["label"])
-        print(f"[SER] user_emotion = {label} ({dominant['score']:.2f})")
-        return label
+        # 归一化标签 → 概率（同名取最大）
+        probs = {}
+        for r in results:
+            lab = _normalize_label(r["label"])
+            probs[lab] = max(probs.get(lab, 0.0), float(r["score"]))
+        print(f"[SER] 概率分布: { {k: round(v, 3) for k, v in probs.items()} }")
+
+        dominant = max(probs, key=probs.get)
+        # 抑制 neutral 偏置：若主情感是中性，但存在达到阈值的非中性情感，则优先取它
+        if dominant == "neutral":
+            non_neu = {k: v for k, v in probs.items() if k != "neutral"}
+            if non_neu:
+                cand = max(non_neu, key=non_neu.get)
+                if non_neu[cand] >= NON_NEUTRAL_THRESHOLD:
+                    dominant = cand
+
+        print(f"[SER] user_emotion = {dominant}")
+        return dominant
     except Exception as e:
+        import traceback
         print(f"[SER] user_emotion 失败: {e}")
+        traceback.print_exc()
         return None
