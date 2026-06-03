@@ -727,9 +727,12 @@ async function initAndLoadAvatar(avatar) {
   wrapper.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;overflow:hidden;';
   container.appendChild(wrapper);
 
-  // Status overlay is hidden to remove online prompt.
+  // Status overlay mirrors STATUS text updates from setStatus().
   container.insertAdjacentHTML('beforeend', `
     <div id="breathingLight" class="breathing-light"></div>
+    <div id="avatarStatus" class="avatar-status" aria-live="polite">
+      <span id="statusText">${STATUS.online.text}</span>
+    </div>
   `);
 
   // Dynamic import so a CDN failure doesn't break page navigation
