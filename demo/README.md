@@ -16,6 +16,19 @@ cd demo
 pip install -r requirements.txt
 ```
 
+### 下载模型（含共情反应所需的 SER 模型）
+
+```bash
+cd demo
+python download_models.py     # 下载 whisper-small / SER 语音情感 / BGE 知识库 三个模型到 ./models/
+python download_xlsr53.py     # 下载 wav2vec2-xlsr53（口型/音频特征）
+```
+
+- **SER 语音情感模型**是「共情反应」功能所需：`download_models.py` 会把 `xmj2002/hubert-base-ch-speech-emotion-recognition` 下到 `./models/ser-model/`，正好对应代码默认路径，无需额外配置。
+- 不下载也不会让程序崩溃，但**共情表情会静默失效**（SER 加载失败时自动跳过）。
+- 想换别的 SER 模型，用环境变量 `SER_MODEL` 指定本地目录或 HuggingFace 模型名（见下方「环境变量」）。
+- 以上模型也可从网盘 `models/` 直接下载（见顶部链接），二选一即可。
+
 主要依赖（已在 `requirements.txt` 列出）：
 - **FastAPI / uvicorn** — Web 服务和 WebSocket
 - **aiohttp** — LLM 流式请求
