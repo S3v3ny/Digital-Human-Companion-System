@@ -744,20 +744,24 @@ async def websocket_chat(websocket: WebSocket):
         # ── 危机检测：优先运行，保证所有消息路径（包括提醒）都能触发 ────────────
         signal_type = crisis_mod.keyword_pre_filter(user_text)
         if signal_type:
-            try:
-                _, ctx_messages = get_session_messages(current_session_id)
-                risk = await asyncio.wait_for(
-                    crisis_mod.classify_crisis_risk(
-                        user_text, list(ctx_messages), signal_type=signal_type
-                    ),
-                    timeout=3.0,
-                )
-            except asyncio.TimeoutError:
-                # hard 信号超时保守判 medium；soft 信号超时降级为 none，避免误报
-                if signal_type == "hard":
-                    risk = {"level": "medium", "score": 0.5, "reason": "精判超时，直接信号保守判定"}
-                else:
-                    risk = {"level": "none", "score": 0.0, "reason": "精判超时，间接信号降级"}
+            if signal_type == "direct_high":
+                # 具体方式词（跳楼/割腕等），无需 LLM，直接判 high，避免超时漏报
+                risk = {"level": "high", "score": 0.95, "reason": "命中具体自杀方式词，直接判定"}
+            else:
+                try:
+                    _, ctx_messages = get_session_messages(current_session_id)
+                    risk = await asyncio.wait_for(
+                        crisis_mod.classify_crisis_risk(
+                            user_text, list(ctx_messages), signal_type=signal_type
+                        ),
+                        timeout=5.0,
+                    )
+                except asyncio.TimeoutError:
+                    # hard 信号超时保守判 medium；soft 信号超时降级为 none，避免误报
+                    if signal_type == "hard":
+                        risk = {"level": "medium", "score": 0.5, "reason": "精判超时，直接信号保守判定"}
+                    else:
+                        risk = {"level": "none", "score": 0.0, "reason": "精判超时，间接信号降级"}
 
             level = risk["level"]
             if level != "none":
@@ -799,7 +803,6 @@ async def websocket_chat(websocket: WebSocket):
 
         # ── 提醒意图优先于对话路由 ──
         parsed = reminders_mod.try_parse_reminder(user_text)
-        print(f"[reminder] user_text={user_text!r}  parsed={parsed}")
         if parsed:
             when_dt, content = parsed
             reminder = reminders_mod.add(when_dt, content)
