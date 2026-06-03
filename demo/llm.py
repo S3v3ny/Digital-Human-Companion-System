@@ -188,7 +188,7 @@ async def classify_interrupt_intent(user_text, current_reply_text="", pending_re
     if local_guess in {"interrupt", "ack"}:
         return local_guess
 
-    url = "https://api.siliconflow.cn/v1/chat/completions"
+    url = "https://api.deepseek.com/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json"
@@ -208,7 +208,7 @@ async def classify_interrupt_intent(user_text, current_reply_text="", pending_re
         """
 
     data = {
-        "model": "deepseek-ai/DeepSeek-V3.2",
+        "model": "deepseek-v4-pro",
         "messages": [
             {"role": "system", "content": "你是一个严格的分类器。"},
             {"role": "user", "content": prompt},
@@ -233,7 +233,7 @@ async def classify_interrupt_intent(user_text, current_reply_text="", pending_re
 
 
 async def build_followup_reply(user_text, emotion, current_reply_text="", pending_reply_text=""):
-    url = "https://api.siliconflow.cn/v1/chat/completions"
+    url = "https://api.deepseek.com/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json"
@@ -254,7 +254,7 @@ async def build_followup_reply(user_text, emotion, current_reply_text="", pendin
         """
 
     data = {
-        "model": "deepseek-ai/DeepSeek-V3.2",
+        "model": "deepseek-v4-pro",
         "messages": [
             {"role": "system", "content": "你是一个口语化、自然、有耐心的中文语音助手。"},
             {"role": "user", "content": prompt},
@@ -352,7 +352,7 @@ def build_crisis_prompt_body() -> str:
 
 
 async def llm_chat(user_text, emotion, session_id, user_name: str = "", avatar_id: int = 1, user_id: str = "", city: str = "", crisis_mode: bool = False):
-    url = "https://api.siliconflow.cn/v1/chat/completions"
+    url = "https://api.deepseek.com/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json"
@@ -470,7 +470,7 @@ async def llm_chat(user_text, emotion, session_id, user_name: str = "", avatar_i
     current_request_messages = [{"role": "system", "content": system_prompt}] + messages + [{"role": "user", "content": user_text}]
 
     data = {
-        "model": "deepseek-ai/DeepSeek-V3.2",
+        "model": "deepseek-v4-pro",
         "messages": current_request_messages,
         "temperature": 0.7,
         "max_tokens": 2048,
