@@ -391,6 +391,9 @@ function resetBotBubbleState() {
   state.currentChunkEl = null;
 }
 
+// 注意：showThinking 只负责聊天框里的“正在思考”气泡。
+// 数字人脸上的思考表情由 showThinkingExpression / clearThinkingExpression 单独控制，
+// 因为气泡会在文字一到就消失，而表情要保持到数字人真正开口（语音播放）才收。
 function showThinking(show) {
   if (show) {
     if (!state.thinkingEl) {
@@ -432,6 +435,80 @@ function clearAvatarEmotion() {
   if (talkingHead) talkingHead.setMood('neutral');
 }
 
+// 思考中表情：直接驱动 ARKit morph（和口型同一条渲染管线，确保可见）。
+// playGesture/emoji 在该模型上不生效，所以每帧写 mtAvatar.newvalue 来“按住”表情。
+// 多套表情：默认是沉思；收到语音情感(user_emotion)后切换成对应的共情表情。
+const _THINK_POSES = {
+  // 中性沉思（默认 / 打字输入时）
+  neutral: {
+    browDownLeft: 0.5, browOuterUpRight: 0.85, browInnerUp: 0.35,
+    eyeSquintLeft: 0.5, mouthRollLower: 0.4, mouthPucker: 0.25,
+    mouthRight: 0.45, mouthPressLeft: 0.3, mouthPressRight: 0.3,
+  },
+  // 用户开心 → 跟着微笑（共情正面）
+  happy: {
+    browInnerUp: 0.3, cheekSquintLeft: 0.5, cheekSquintRight: 0.5,
+    eyeSquintLeft: 0.4, eyeSquintRight: 0.4,
+    mouthSmileLeft: 0.7, mouthSmileRight: 0.7,
+  },
+  // 用户难过/害怕 → 温柔关切（不镜像负面，转为体贴）
+  love: {
+    browInnerUp: 0.6, cheekSquintLeft: 0.3, cheekSquintRight: 0.3,
+    eyeSquintLeft: 0.25, eyeSquintRight: 0.25,
+    mouthSmileLeft: 0.4, mouthSmileRight: 0.4,
+  },
+  // 共情担忧（眉心上扬、嘴角微垂）
+  sad: {
+    browInnerUp: 0.85, browDownLeft: 0.1,
+    mouthFrownLeft: 0.45, mouthFrownRight: 0.45,
+    mouthPressLeft: 0.25, mouthPressRight: 0.25, mouthRollLower: 0.2,
+  },
+  // 惊讶（睁眼、扬眉、微张嘴）
+  surprised: {
+    browInnerUp: 0.7, browOuterUpLeft: 0.6, browOuterUpRight: 0.6,
+    eyeWideLeft: 0.55, eyeWideRight: 0.55, jawOpen: 0.18, mouthFunnel: 0.2,
+  },
+};
+// 所有表情用到的 morph 名集合（切换表情时，旧表情多出来的通道要归零）
+const _ALL_THINK_KEYS = [...new Set(Object.values(_THINK_POSES).flatMap(p => Object.keys(p)))];
+let _thinkRAF = null;
+let _thinkPose = _THINK_POSES.neutral;
+const _thinkCur = {};   // 各 morph 的平滑当前值（用于柔和过渡）
+
+// poseName 可选：
+//  - 传入(共情切换)：仅在思考表情已激活时改变目标表情，避免说话后又冒出思考脸；
+//  - 不传(发消息/turn_start)：开始或保持中性沉思表情。
+function showThinkingExpression(poseName) {
+  if (!talkingHead?.mtAvatar) return;
+  if (poseName) {
+    if (_thinkRAF === null) return;             // 没在思考了就忽略迟到的情感
+    if (_THINK_POSES[poseName]) _thinkPose = _THINK_POSES[poseName];  // 平滑过渡到共情表情
+    return;
+  }
+  if (_thinkRAF !== null) return;               // 已在运行
+  _thinkPose = _THINK_POSES.neutral;
+  const loop = () => {
+    _thinkRAF = requestAnimationFrame(loop);
+    const mt = talkingHead?.mtAvatar;
+    if (!mt) return;
+    for (const k of _ALL_THINK_KEYS) {
+      const target = _thinkPose[k] || 0;
+      _thinkCur[k] = (_thinkCur[k] || 0) + (target - (_thinkCur[k] || 0)) * 0.18;  // 缓动
+      if (mt[k]) Object.assign(mt[k], { newvalue: _thinkCur[k], needsUpdate: true });
+    }
+  };
+  loop();
+}
+function clearThinkingExpression() {
+  if (_thinkRAF !== null) { cancelAnimationFrame(_thinkRAF); _thinkRAF = null; }
+  const mt = talkingHead?.mtAvatar;
+  for (const k of _ALL_THINK_KEYS) {
+    _thinkCur[k] = 0;
+    if (mt && mt[k]) Object.assign(mt[k], { newvalue: 0, needsUpdate: true });
+  }
+  _thinkPose = _THINK_POSES.neutral;
+}
+
 // ---------------------- Viseme / animation stubs ----------------------
 // TalkingHead handles lipsync and idle animation internally.
 function clearVisemeTimers() { }
@@ -452,9 +529,10 @@ function handleChunk(d) {
   const rid = d.responseId || state.responseId || `${Date.now()}`;
   const chunkText = (d.text || '').trim();
   if (chunkText && !state.botChunks.includes(chunkText)) createBotBubble(rid, chunkText);
-  if (d.emotion) setAvatarEmotion(d.emotion);
   const audio = d.data || d.audio;
   if (audio) {
+    clearThinkingExpression();   // 真正开口说话，结束思考表情
+    if (d.emotion) setAvatarEmotion(d.emotion);
     setStatus(STATUS.playAudio);
     AudioPlayer.enqueue(audio, rid, d.seq, d.visemes || []);
   }
@@ -465,6 +543,7 @@ const msgHandlers = {
     const text = d.content || d.text || '';
     if (!text) return;
     showThinking(false);
+    clearThinkingExpression();
     setStatus(STATUS.speaking);
     addHistory('bot', text);
     addMsgToSession('bot', text);
@@ -474,6 +553,7 @@ const msgHandlers = {
     const audio = d.data || d.audio;
     if (!audio) return;
     showThinking(false);
+    clearThinkingExpression();
     setStatus(STATUS.playAudio);
     AudioPlayer.enqueue(audio, state.responseId || `${Date.now()}`, 0);
     setTimeout(() => setStatus(STATUS.online), 2000);
@@ -488,7 +568,8 @@ const msgHandlers = {
   },
   user_emotion(d) {
     const mood = _USER_EMPATHY_MAP[d.emotion] || 'neutral';
-    if (talkingHead) talkingHead.setMood(mood);
+    // 在 LLM 思考间隙，把思考表情切换成与用户语音情感对应的共情表情
+    showThinkingExpression(mood);
   },
   turn_start(d) {
     showThinking(false);
@@ -499,12 +580,16 @@ const msgHandlers = {
     resetBotBubbleState();
     state.responseId = d.responseId || `${Date.now()}`;
     setStatus(STATUS.genReply);
+    // turn_start 只是“开始生成”，真正的等待发生在这之后；
+    // 保持思考表情，直到首个回复内容到来（届时 showThinking(false) 会清除）
+    showThinkingExpression();
   },
   stop_output(d) {
     clearVisemeTimers();
     setAvatarMouth(0);
     AudioPlayer.reset();
     showThinking(false);
+    clearThinkingExpression();
     const fullText = getBotFullText();
     if (fullText) addMsgToSession('bot', fullText + '…');
     resetBotBubbleState();
@@ -516,6 +601,7 @@ const msgHandlers = {
     setAvatarMouth(0);
     AudioPlayer.reset();
     showThinking(false);
+    clearThinkingExpression();
     const spokenText = d.spokenText || getBotFullText();
     if (spokenText) addMsgToSession('bot', spokenText + '…');
     resetBotBubbleState();
@@ -525,6 +611,7 @@ const msgHandlers = {
   listen_state() { setStatus(STATUS.listenSay); },
   turn_end(d) {
     showThinking(false);
+    clearThinkingExpression();
     const fullText = d.fullText || getBotFullText();
     if (fullText) addMsgToSession('bot', fullText);
     resetBotBubbleState();
@@ -534,9 +621,10 @@ const msgHandlers = {
   },
   thinking(d) {
     showThinking(!!d.status);
+    if (d.status) showThinkingExpression(); else clearThinkingExpression();
     setStatus(d.status ? STATUS.thinking : STATUS.online);
   },
-  error(d) { showToast(d.message || '服务器处理失败', 'error'); },
+  error(d) { showThinking(false); clearThinkingExpression(); showToast(d.message || '服务器处理失败', 'error'); },
   reminder_list(d) {
     console.log('[reminder] list received', d);
     state.reminders = Array.isArray(d.reminders) ? d.reminders.slice() : [];
@@ -941,6 +1029,7 @@ function sendMessage() {
   addHistory('user', text);
   addMsgToSession('user', text);
   showThinking(true);
+  showThinkingExpression();   // 数字人立刻进入思考表情，保持到开口说话
   setStatus(STATUS.thinking);
   if (!state.bargeInActive) AudioPlayer.reset();
   state.bargeInActive = false;
@@ -1260,6 +1349,70 @@ function initVoiceRecognition() {
   _SRConstructor = window.SpeechRecognition || window.webkitSpeechRecognition;
 }
 
+// ---------------------- 麦克风录音（仅用于后端 SER 共情情感） ----------------------
+// 浏览器语音识别只给文本；这里另外采集原始音频，停止时下采样成 16kHz Int16 PCM，
+// 发给后端做语音情感识别(SER)，后端回推 user_emotion → 数字人在思考间隙做共情表情。
+const VoiceRecorder = {
+  ctx: null, stream: null, source: null, processor: null,
+  chunks: [], recording: false,
+
+  async start() {
+    try {
+      this.stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+      });
+    } catch (e) {
+      console.warn('[VoiceRecorder] 麦克风不可用，跳过情感采集', e);
+      return false;
+    }
+    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    this.source = this.ctx.createMediaStreamSource(this.stream);
+    this.processor = this.ctx.createScriptProcessor(4096, 1, 1);
+    this.chunks = [];
+    this.recording = true;
+    this.processor.onaudioprocess = (e) => {
+      if (!this.recording) return;
+      this.chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+    };
+    this.source.connect(this.processor);
+    this.processor.connect(this.ctx.destination);
+    return true;
+  },
+
+  // 停止采集并返回 16kHz Int16 PCM 数组（普通 JS Array，便于 JSON 传输）
+  stop() {
+    if (!this.recording) return null;
+    this.recording = false;
+    const inRate = this.ctx ? this.ctx.sampleRate : 48000;
+    let total = 0;
+    for (const c of this.chunks) total += c.length;
+    const merged = new Float32Array(total);
+    let off = 0;
+    for (const c of this.chunks) { merged.set(c, off); off += c.length; }
+    this.chunks = [];
+    try { this.processor && this.processor.disconnect(); } catch (_) { }
+    try { this.source && this.source.disconnect(); } catch (_) { }
+    try { this.stream && this.stream.getTracks().forEach(t => t.stop()); } catch (_) { }
+    try { this.ctx && this.ctx.close(); } catch (_) { }
+    this.ctx = this.source = this.processor = this.stream = null;
+    if (total === 0) return null;
+    return downsampleToInt16(merged, inRate, 16000);
+  },
+};
+
+// 线性下采样 + 转 Int16，返回普通数组
+function downsampleToInt16(float32, inRate, outRate) {
+  const ratio = inRate / outRate;
+  const outLen = Math.max(1, Math.floor(float32.length / ratio));
+  const out = new Array(outLen);
+  for (let i = 0; i < outLen; i++) {
+    let s = float32[Math.floor(i * ratio)] || 0;
+    s = Math.max(-1, Math.min(1, s));
+    out[i] = s < 0 ? Math.round(s * 0x8000) : Math.round(s * 0x7FFF);
+  }
+  return out;
+}
+
 function createRecognitionInstance() {
   if (!_SRConstructor) return null;
   const rec = new _SRConstructor();
@@ -1309,7 +1462,7 @@ function createRecognitionInstance() {
   return rec;
 }
 
-// 收尾：还原 UI、发送累积文本
+// 收尾：还原 UI、把采集到的音频发去做 SER 共情情感，再发送识别文本
 function finishVoiceRecording() {
   stopVoiceUI();
   setStatus(STATUS.online);
@@ -1317,6 +1470,14 @@ function finishVoiceRecording() {
   state.voiceFinalText = '';
   state.voiceSessionText = '';
   state.voiceStopping = false;
+  // 先把音频发给后端做语音情感识别（不触发回复），后端会回推 user_emotion。
+  // SER 只需几秒即可，截最近 ~6s，避免超过 WebSocket 单帧大小上限。
+  let pcm = VoiceRecorder.stop();
+  if (pcm && pcm.length > 1600) {   // 至少约 0.1s 才有意义
+    const MAX = 16000 * 6;
+    if (pcm.length > MAX) pcm = pcm.slice(pcm.length - MAX);
+    wsSend({ type: 'audio_emotion', data: pcm });
+  }
   if (text) { dom.messageInput.value = text; sendMessage(); }
 }
 
@@ -1351,12 +1512,15 @@ function startVoiceRecording() {
   state.voiceFinalText = '';
   state.voiceSessionText = '';
   state.voiceStopping = false;
+  // 同时开始采集原始音频（用于后端 SER 共情情感；失败不影响文字识别）
+  VoiceRecorder.start();
   state.recognition = createRecognitionInstance();
   try {
     state.recognition.start();
   } catch (_) {
     // 启动失败：还原 UI，避免按钮卡在“录音中”
     stopVoiceUI();
+    VoiceRecorder.stop();
     showToast('语音识别暂时不可用', 'warning');
   }
 }
