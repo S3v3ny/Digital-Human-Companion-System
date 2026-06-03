@@ -742,19 +742,26 @@ async def websocket_chat(websocket: WebSocket):
         preset_reply = None
 
         # ── 危机检测：优先运行，保证所有消息路径（包括提醒）都能触发 ────────────
-        if crisis_mod.keyword_pre_filter(user_text):
+        signal_type = crisis_mod.keyword_pre_filter(user_text)
+        if signal_type:
             try:
                 _, ctx_messages = get_session_messages(current_session_id)
                 risk = await asyncio.wait_for(
-                    crisis_mod.classify_crisis_risk(user_text, list(ctx_messages)),
+                    crisis_mod.classify_crisis_risk(
+                        user_text, list(ctx_messages), signal_type=signal_type
+                    ),
                     timeout=3.0,
                 )
             except asyncio.TimeoutError:
-                risk = {"level": "medium", "score": 0.5, "reason": "精判超时，关键词命中保守判定"}
+                # hard 信号超时保守判 medium；soft 信号超时降级为 none，避免误报
+                if signal_type == "hard":
+                    risk = {"level": "medium", "score": 0.5, "reason": "精判超时，直接信号保守判定"}
+                else:
+                    risk = {"level": "none", "score": 0.0, "reason": "精判超时，间接信号降级"}
 
             level = risk["level"]
             if level != "none":
-                session_risk.record(level)
+                session_risk.record(level, signal_type=signal_type)
                 crisis_mod.log_crisis_event(
                     user_id=current_user_id,
                     session_id=current_session_id,
@@ -763,8 +770,9 @@ async def websocket_chat(websocket: WebSocket):
                     score=risk["score"],
                     reason=risk["reason"],
                     action="detect",
+                    signal_type=signal_type,
                 )
-                print(f"[crisis] level={level} score={risk['score']:.2f} reason={risk['reason']!r}")
+                print(f"[crisis] signal={signal_type} level={level} score={risk['score']:.2f} reason={risk['reason']!r}")
 
                 if session_risk.needs_full_alert:
                     session_risk.mark_alerted()
@@ -783,6 +791,7 @@ async def websocket_chat(websocket: WebSocket):
                         score=risk["score"],
                         reason=risk["reason"],
                         action="alert_sent",
+                        signal_type=signal_type,
                     )
                     # 触发预警时用固定播报文本替换 preset_reply，确保热线号码被语音播出
                     preset_reply = crisis_mod.build_crisis_alert_reply()
