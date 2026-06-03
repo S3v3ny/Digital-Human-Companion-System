@@ -220,13 +220,13 @@ _SUMMARY_PROMPT = """根据以下用户画像数据，生成一段简洁的中�
 
 
 async def _llm_call(prompt: str, max_tokens: int = 512) -> str:
-    url = "https://api.siliconflow.cn/v1/chat/completions"
+    url = "https://api.deepseek.com/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json",
     }
     payload = {
-        "model": "deepseek-ai/DeepSeek-V3.2",
+        "model": "deepseek-v4-pro",
         "messages": [
             {"role": "system", "content": "你是严格的 JSON 助手，只输出 JSON，不输出任何其他内容。"},
             {"role": "user", "content": prompt},
@@ -261,7 +261,7 @@ async def _extract_and_apply(user_id: str, user_text: str, assistant_text: str):
         current_profile=json.dumps(snapshot, ensure_ascii=False, indent=2),
     )
 
-    raw = await _llm_call(prompt, max_tokens=512)
+    raw = await _llm_call(prompt, max_tokens=1024)  # 推理模型预留思考预算
     if not raw:
         return
 
@@ -318,13 +318,13 @@ async def _regen_summary(user_id: str):
     if not has_data:
         return
 
-    url = "https://api.siliconflow.cn/v1/chat/completions"
+    url = "https://api.deepseek.com/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json",
     }
     payload = {
-        "model": "deepseek-ai/DeepSeek-V3.2",
+        "model": "deepseek-v4-pro",
         "messages": [
             {"role": "system", "content": "你是用户画像摘要助手，生成简洁的用户背景描述。"},
             {"role": "user", "content": _SUMMARY_PROMPT.format(
@@ -332,7 +332,8 @@ async def _regen_summary(user_id: str):
             )},
         ],
         "temperature": 0.3,
-        "max_tokens": 150,
+        # 推理模型：思考占 reasoning_content，须留足预算否则摘要（content）为空
+        "max_tokens": 512,
         "stream": False,
     }
 

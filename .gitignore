@@ -21,6 +21,14 @@ demo/vector_db/
 # 数据集
 psy_data.json
 demo/psy_data.json
+# SOS-1K / SoulChat 训练语料（体积过大，SoulChat 单文件 >100MB，从官方源下载）
+demo/datasets/
+
+# 保留小体积的危机风险分类器（SOS-1K 训练，~800KB），开箱即用无需重训
+!demo/models/
+demo/models/*
+!demo/models/crisis-bert/
+!demo/models/crisis-bert/**
 
 # 环境变量
 .env

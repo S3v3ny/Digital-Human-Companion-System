@@ -21,8 +21,10 @@ pip install -r requirements.txt
 ```bash
 cd demo
 python download_models.py     # 下载 whisper-small / SER 语音情感 / BGE 知识库 三个模型到 ./models/
-python download_xlsr53.py     # 下载 wav2vec2-xlsr53（口型/音频特征）
+# python download_xlsr53.py   # 旧版 audio2face 口型方案才需要；当前服务由 SER 驱动表情，无需执行
 ```
+
+> 危机风险分类器（SOS-1K 训练）与 SoulChat 多轮语料知识库的接入说明，见**项目根目录 [README.md](../README.md) 步骤 5、6**。分类器 `models/crisis-bert/classifier.pkl` 已随仓库同步，开箱即用。
 
 - **SER 语音情感模型**是「共情反应」功能所需：`download_models.py` 会把 `xmj2002/hubert-base-ch-speech-emotion-recognition` 下到 `./models/ser-model/`，正好对应代码默认路径，无需额外配置。
 - 不下载也不会让程序崩溃，但**共情表情会静默失效**（SER 加载失败时自动跳过）。
@@ -43,7 +45,7 @@ python download_xlsr53.py     # 下载 wav2vec2-xlsr53（口型/音频特征）
 ### 环境变量（.env）
 
 ```ini
-API_KEY=<SiliconFlow / 兼容 OpenAI 接口的 API Key>
+API_KEY=<DeepSeek API Key （接口 https://api.deepseek.com，模型 deepseek-v4-pro）>
 AZURE_SPEECH_KEY=<Azure 语音服务 Key>
 AZURE_SPEECH_REGION=<区域，如 southeastasia>
 
@@ -69,7 +71,7 @@ python server.py
 ### 架构要点
 
 - **前端**：`public/index.html` + `public/script.js`，Tailwind + Lucide + DiceBear + TalkingHead 3D
-- **LLM**：SiliconFlow Qwen2.5-7B-Instruct，流式输出，按句分片送 TTS
+- **LLM**：DeepSeek `deepseek-v4-pro`（接口 `https://api.deepseek.com`），流式输出，按句分片送 TTS
 - **工具**：仅天气走远程 MCP（实时数据），其它快捷按钮由 LLM 自身知识回答
 - **关怀模式**：`html.care-mode` 抬高根字号 25%，整页 rem 单位等比放大
 - **共情反应**：用户语音经 SER 识别情感（`audio_emotion` → `faceformer_adapter.audio_bytes_to_user_emotion`），后端回推 `user_emotion`，数字人在 LLM 思考间隙切换为对应共情表情（陪伴式：不镜像负面情绪，转为关切）。SER 对 neutral 做去偏置，可调阈值见上方环境变量

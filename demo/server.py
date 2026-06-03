@@ -687,7 +687,14 @@ async def websocket_chat(websocket: WebSocket):
     last_emotion_time = 0
     emotion_busy = False
 
-    session_risk = crisis_mod.SessionRiskState()
+    # 危机风险状态按 session_id 独立维护：每个对话有自己的 30 分钟冷却，
+    # 新对话（新 session_id）天然零冷却，不沿用其它对话的预警冷却。
+    session_risks: Dict[str, crisis_mod.SessionRiskState] = {}
+
+    def get_session_risk() -> crisis_mod.SessionRiskState:
+        if current_session_id not in session_risks:
+            session_risks[current_session_id] = crisis_mod.SessionRiskState()
+        return session_risks[current_session_id]
 
     def is_current_response(response_id: int) -> bool:
         return response_id == current_response_id
@@ -740,9 +747,11 @@ async def websocket_chat(websocket: WebSocket):
         previous_state = active_response_state
         had_active_task = current_chat_task and not current_chat_task.done()
         preset_reply = None
+        session_risk = get_session_risk()   # 当前对话的独立危机状态
 
         # ── 危机检测：优先运行，保证所有消息路径（包括提醒）都能触发 ────────────
-        signal_type = crisis_mod.keyword_pre_filter(user_text)
+        # detect_signal = 关键词粗筛 + 本地分类器兜底（捕捉关键词漏判的隐晦表达）
+        signal_type = crisis_mod.detect_signal(user_text)
         if signal_type:
             if signal_type == "direct_high":
                 # 具体方式词（跳楼/割腕等），无需 LLM，直接判 high，避免超时漏报
@@ -754,12 +763,15 @@ async def websocket_chat(websocket: WebSocket):
                         crisis_mod.classify_crisis_risk(
                             user_text, list(ctx_messages), signal_type=signal_type
                         ),
-                        timeout=5.0,
+                        # 推理模型（deepseek-v4-pro）精判需数秒，给足余量避免超时降级；
+                        # 仅 soft/classifier 隐晦信号才走到这里，direct_high 已即时判定。
+                        timeout=8.0,
                     )
                 except asyncio.TimeoutError:
-                    # hard 信号超时保守判 medium；soft 信号超时降级为 none，避免误报
-                    if signal_type == "hard":
-                        risk = {"level": "medium", "score": 0.5, "reason": "精判超时，直接信号保守判定"}
+                    # 超时保守策略：hard / classifier 信号判 medium（进关怀模式）；
+                    # soft 信号降级为 none，避免误报
+                    if signal_type in ("hard", "classifier"):
+                        risk = {"level": "medium", "score": 0.5, "reason": "精判超时，风险信号保守判定"}
                     else:
                         risk = {"level": "none", "score": 0.0, "reason": "精判超时，间接信号降级"}
 
@@ -924,8 +936,8 @@ async def websocket_chat(websocket: WebSocket):
                         "reminders": [r.to_dict() for r in reminders_mod.list_active()],
                     })
 
-                if msg_type in ("new_session", "switch_session"):
-                    session_risk = crisis_mod.SessionRiskState()
+                # 危机状态已按 session_id 独立维护（见 get_session_risk），
+                # 切换/新建对话无需手动重置——新 session_id 自动获得零冷却的全新状态。
 
                 incoming_name = (payload.get("userName") or "").strip()
                 if incoming_name:

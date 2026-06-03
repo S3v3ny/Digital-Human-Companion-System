@@ -1,9 +1,11 @@
 """
-心理危机预警模块：两层检测 + 分级响应。
+心理危机预警模块：三层检测 + 分级响应。
 
-第一层A（hard）：高置信直接表达关键词，不受排除词拦截，超时 fallback=medium
-第一层B（soft）：间接风险信号（无望感/负担感/道别），受排除词拦截，超时 fallback=none
-第二层：LLM 精判，参照 C-SSRS 维度，仅关键词命中时触发，最多 3s 超时
+第一层A（direct_high）：具体方式词（跳楼/割腕/上吊等），无需 LLM，直接判 high
+第一层B（hard）：直接轻生表达，超时 fallback=medium
+第一层C（soft）：间接风险信号（无望感/负担感/道别），超时 fallback=none
+第二层（本地）：TF-IDF 分类器（SOS-1K 训练），<5ms，高置信度结果直接采纳
+第三层（LLM）：DeepSeek 精判，参照 C-SSRS + SOS-1K 少样本示例，最多 5s 超时
 状态机：SessionRiskState 跟踪单会话累积风险，hard/soft medium 分源计数
 日志：追加写 crisis_log.jsonl，含 signal_type 字段，供人工复查
 
@@ -18,19 +20,18 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
-import re
 import time
 import aiohttp
 import os
 from pathlib import Path
 
 from dotenv import load_dotenv
+from crisis_classifier import predict as _local_predict
 
 load_dotenv()
 _API_KEY = os.getenv("API_KEY")
-_LLM_URL = "https://api.siliconflow.cn/v1/chat/completions"
+_LLM_URL = "https://api.deepseek.com/v1/chat/completions"
 
 LOG_FILE = Path(__file__).resolve().parent / "crisis_log.jsonl"
 
@@ -51,6 +52,7 @@ _CRISIS_KEYWORDS = [
     # 补充遗漏的直接表达
     "想消失", "死了就好了", "死了大家都解脱", "结束一切",
     "永远睡过去", "不想再醒来", "死了一了百了",
+    "一走了之", "一了百了", "了此残生", "了结自己", "活不下去了", "不想活着",
 ]
 
 # ── 第一层B：间接风险信号（被动意念/无望感/负担感/道别），触发 LLM 精判 ────────
@@ -73,8 +75,9 @@ _SOFT_KEYWORDS = [
     "最后想谢谢你", "和你说最后一次", "把东西都整理好了",
     # 老年群体特有间接表达（中文临床文献明确点名的隐喻性信号）
     "这辈子差不多了", "不想拖累孩子", "不想拖累儿女",
-    # 老年人"去找/见/陪已故配偶"隐语（高度特异性死亡意念）
-    "去找老伴", "去见老伴", "去陪老伴", "找老伴去了", "去我老伴那里",
+    # 老年人"去找/见/陪已故配偶"隐语（容忍"我/儿"中缀；语义歧义留给 LLM 结合上下文判）
+    "陪老伴", "陪我老伴", "陪老伴儿", "陪我老伴儿",
+    "找老伴", "找我老伴", "见老伴", "见我老伴",
     "去找我先生", "去找我太太", "去找我丈夫", "去找我妻子",
     # 隐晦跳跃表达（"轻轻一跳/只要一跳"暗指跳楼）
     "轻轻一跳", "只要一跳", "一跳就能见",
@@ -107,48 +110,128 @@ def keyword_pre_filter(text: str) -> str:
         ""            - 无命中，跳过 LLM 检测
     """
     compact = (text or "").replace(" ", "")
-    # direct_high：具体方式词，不受排除词拦截，无需 LLM 精判
-    if any(kw in compact for kw in _DIRECT_HIGH_KEYWORDS):
-        return "direct_high"
-    # hard 信号不受排除词拦截——直接提及自杀意图，交给 LLM 精判上下文
-    if any(kw in compact for kw in _CRISIS_KEYWORDS):
-        return "hard"
-    # soft 信号才检查排除词，避免"听说有人撑不下去"等第三方讨论误触发
-    if any(ex in compact for ex in _EXCLUSION_PHRASES):
+    has_exclusion = any(ex in compact for ex in _EXCLUSION_PHRASES)
+
+    # 直接方式词 + 直接轻生意图：无排除词即判 direct_high（不走 LLM，避免精判超时
+    # 漏报这类最明确的表达）。含排除词（听说/新闻/他说等第三方语境）则降级 hard 交 LLM。
+    if (any(kw in compact for kw in _DIRECT_HIGH_KEYWORDS)
+            or any(kw in compact for kw in _CRISIS_KEYWORDS)):
+        return "hard" if has_exclusion else "direct_high"
+
+    # soft 信号检查排除词，避免"听说有人撑不下去"等第三方讨论误触发
+    if has_exclusion:
         return ""
     if any(kw in compact for kw in _SOFT_KEYWORDS):
         return "soft"
     return ""
 
 
-# ── 第二层：LLM 精判 ──────────────────────────────────────────────────────────
+# ── 宽风险语境词表：用于门控分类器兜底（非直接判定）─────────────────────────
+# 这些词本身不足以判定危机，但出现时值得让分类器+LLM 进一步审查，
+# 用以捕捉精确关键词漏判的「隐晦/迂回」高危表达（撞车、安排后事、留遗产等）。
+# 刻意不含"保险/走了/离开"等高频歧义词，避免日常闲聊被误触发。
+_RISK_CONTEXT_TERMS = [
+    # 迂回的死亡方式
+    "走到马路", "马路中间", "马路上", "撞车", "车祸", "出车祸", "出意外", "出点意外",
+    "安眠药", "烧炭", "农药", "跳下", "从楼上", "从高处",
+    # 临终 / 安排后事
+    "临终", "后事", "遗书", "遗嘱", "遗产", "遗物", "存折",
+    "整理好了", "都安排好了", "交代", "留给孩子", "留给儿子", "留给女儿",
+    "给儿子留", "给孩子留", "给女儿留", "留笔钱", "留一笔", "赔偿金",
+    # 绝望 / 告别隐语
+    "解脱", "一了百了", "永别", "离开这个世界", "离开人世", "不在人世", "离开人间",
+]
+
+# 分类器兜底阈值：风险语境词命中后，分类器 high 概率达此值即升级 LLM 精判。
+# 设 0.38：风险语境词已大幅缩小范围，此处宁可多送 LLM 也不漏判隐晦高危。
+_BACKSTOP_HIGH_PROBA = 0.38
+
+
+def detect_signal(text: str) -> str:
+    """
+    危机信号检测：关键词粗筛 + （风险语境词门控的）本地分类器兜底。
+
+    1. 关键词命中优先（direct_high/hard/soft）。
+    2. 未命中时，仅当文本含「风险语境词」才启用分类器兜底，
+       避免对日常闲聊（分布外输入）误触发。分类器确认 high 或不可用时升级
+       为 "classifier" 信号，交 LLM 结合上下文做最终判定。
+
+    Returns:
+        "direct_high" | "hard" | "soft" | "classifier" | ""
+    """
+    sig = keyword_pre_filter(text)
+    if sig:
+        return sig
+    # 风险语境词门控：无风险语境词的普通对话直接放行
+    compact = (text or "").replace(" ", "")
+    if not any(term in compact for term in _RISK_CONTEXT_TERMS):
+        return ""
+    # 有风险语境词 → 分类器确认（不可用时保守升级，交 LLM 兜底）
+    local = _local_predict(text)
+    if not local["available"] or local["probas"].get("high", 0.0) >= _BACKSTOP_HIGH_PROBA:
+        return "classifier"
+    return ""
+
+
+# ── SOS-1K 少样本示例（供 LLM 精判校准用，来自真实标注数据）────────────────
+_FEW_SHOT_EXAMPLES = (
+    "【判断示例（来自真实数据，供参考）】\n"
+    "- 「跳楼死得很难看 所以还是好好活着吧」→ none（提到方式但在劝阻自己，无真实意念）\n"
+    "- 「不是我想熬夜，我到希望24小时都睡着，这样也就不痛苦了」→ none（绝望感，无自杀意念）\n"
+    "- 「我真的很想哭一哭，但是哭有什么用呢？我也想选择离开这个世界」→ medium（被动死亡意念，无具体方式）\n"
+    "- 「有没有人可以当我的树洞啊，我好想去死」→ medium（强烈意愿，但无计划）\n"
+    "- 「写了很长很长的遗书，如果发出去了就真的死掉了。就是今天我特别想死。」→ high（已写遗书，有立即行动意图）\n"
+)
+
+# ── 第二+三层：本地分类器 + LLM 精判 ─────────────────────────────────────────
 async def classify_crisis_risk(
     user_text: str, context_messages: list, signal_type: str = "hard"
 ) -> dict:
     """
-    调用 LLM 精判风险等级。仅在关键词命中时调用。
+    两步精判：先本地 TF-IDF（毫秒级），高置信度直接返回；其余走 LLM。
 
     Args:
-        signal_type: "hard"（直接表达）或 "soft"（间接信号），影响 prompt 侧重点
+        signal_type: "hard"（直接表达）或 "soft"（间接信号），影响 fallback 策略
 
     Returns:
         {"level": "none"|"medium"|"high", "score": float, "reason": str}
     """
+    # ── 第二层：本地分类器初筛 ─────────────────────────────────────────────────
+    local = _local_predict(user_text)
+    if local["available"]:
+        level, score = local["level"], local["score"]
+        # ≥0.75 时准确率 95.7%（SOS-1K 测试集），足够直接采纳
+        if level == "high" and score >= 0.75:
+            return {"level": "high", "score": score, "reason": f"本地分类器高置信判定 ({score:.2f})"}
+        # soft 信号 + 本地高置信 none：排除误报，避免无谓 LLM 调用
+        if level == "none" and score >= 0.75 and signal_type == "soft":
+            return {"level": "none", "score": score, "reason": f"本地分类器排除风险 ({score:.2f})"}
+    # ── 第三层：LLM 精判（有对话历史，处理模糊/复杂语境）──────────────────────
+
     recent = (context_messages or [])[-6:]
     context_str = "\n".join(
         f"{'用户' if m['role'] == 'user' else '助手'}: {m['content'][:150]}"
         for m in recent
     )
 
-    signal_hint = (
-        "【触发原因：用户使用了直接轻生/自杀相关表达】"
-        if signal_type == "hard"
-        else "【触发原因：用户出现了间接风险信号（无望感/自觉是负担/道别等），需综合上下文判断】"
-    )
+    if signal_type == "hard":
+        signal_hint = "【触发原因：用户使用了直接轻生/自杀相关表达】"
+    elif signal_type == "classifier":
+        signal_hint = "【触发原因：风险分类器在用户发言中检测到隐晦的潜在自杀风险（如撞车、安排后事等迂回表达），请结合上下文判断是否为真实风险】"
+    else:
+        signal_hint = "【触发原因：用户出现了间接风险信号（无望感/自觉是负担/道别等），需综合上下文判断】"
+
+    # 仅在置信度 > 0.5 时才提供本地分类器参考，避免低置信度结果锚定 LLM 判断
+    local_hint = ""
+    if local["available"] and local["score"] > 0.5:
+        local_hint = (
+            f"\n【本地分类器参考（仅供辅助，请综合上下文独立判断）】\n"
+            f"  预测：{local['level']}，置信度：{local['score']:.2f}\n"
+        )
 
     prompt = (
         "你是心理危机风险评估助手，参照哥伦比亚自杀严重程度评定量表（C-SSRS）进行判断。\n\n"
-        f"{signal_hint}\n\n"
+        f"{signal_hint}{local_hint}\n"
         f"近期对话（最多6轮）：\n{context_str or '（无历史）'}\n\n"
         f"用户最新发言：{user_text}\n\n"
         "【判断标准（严格遵守）】\n"
@@ -163,18 +246,21 @@ async def classify_crisis_risk(
         "  ① 明确表达想死、想自杀、有具体方法（跳楼/割腕/服药等）\n"
         "  ② 表达道别、安排后事、赠送遗物的意图\n"
         "  ③ 表达立即行动的意图\n\n"
-        "只输出一个 JSON 对象，格式：{\"level\": \"none|medium|high\", "
+        + _FEW_SHOT_EXAMPLES
+        + "\n只输出一个 JSON 对象，格式：{\"level\": \"none|medium|high\", "
         "\"score\": 0.0-1.0, \"reason\": \"简短理由（≤30字）\"}"
     )
 
     data = {
-        "model": "deepseek-ai/DeepSeek-V3.2",
+        "model": "deepseek-v4-pro",
         "messages": [
             {"role": "system", "content": "你是严格的心理危机分类器，只输出JSON，不输出任何其他内容。"},
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.1,
-        "max_tokens": 100,
+        # deepseek-v4-pro 为推理模型，思考占用 reasoning_content（约数百 token），
+        # 须留足预算，否则 content（JSON）被截断 → 解析失败 → 永远走 fallback。
+        "max_tokens": 1024,
         "stream": False,
     }
 
@@ -189,25 +275,37 @@ async def classify_crisis_risk(
                 resp.raise_for_status()
                 res_json = await resp.json()
                 content = res_json["choices"][0]["message"]["content"].strip()
-                m = re.search(r"\{.*?\}", content, re.DOTALL)
-                if m:
-                    result = json.loads(m.group())
-                    level = result.get("level", "none")
-                    if level not in ("none", "medium", "high"):
-                        level = "none"
-                    return {
-                        "level": level,
-                        "score": float(result.get("score", 0.0)),
-                        "reason": str(result.get("reason", "")),
-                    }
-    except asyncio.TimeoutError:
-        print(f"[crisis] LLM精判超时，signal_type={signal_type}")
+                # 用括号计数法提取最外层 {} 对，避免 reason 字段含 } 时被截断
+                start = content.find("{")
+                if start != -1:
+                    depth, end = 0, -1
+                    for i, ch in enumerate(content[start:], start):
+                        if ch == "{":
+                            depth += 1
+                        elif ch == "}":
+                            depth -= 1
+                            if depth == 0:
+                                end = i
+                                break
+                    if end != -1:
+                        result = json.loads(content[start:end + 1])
+                        level = result.get("level", "none")
+                        if level not in ("none", "medium", "high"):
+                            level = "none"
+                        return {
+                            "level": level,
+                            "score": float(result.get("score", 0.0)),
+                            "reason": str(result.get("reason", "")),
+                        }
     except Exception as e:
+        # CancelledError（来自外层 wait_for）会穿透此 except（BaseException 子类），
+        # 其余网络/解析错误（含 401）在此处理后落入下方 fallback
         print(f"[crisis] LLM精判失败: {e}")
 
-    # 超时或失败时：hard 信号保守判 medium；soft 信号降级为 none（避免误报）
-    if signal_type == "hard":
-        return {"level": "medium", "score": 0.5, "reason": "LLM不可用，直接信号保守判定"}
+    # LLM 不可用 / 响应无有效 JSON 时的兜底（务必返回 dict，否则调用方解包 None 崩溃）：
+    # hard / classifier 保守判 medium（进关怀模式）；soft 降级 none（避免误报）
+    if signal_type in ("hard", "classifier"):
+        return {"level": "medium", "score": 0.5, "reason": "LLM不可用，风险信号保守判定"}
     return {"level": "none", "score": 0.0, "reason": "LLM不可用，间接信号降级"}
 
 

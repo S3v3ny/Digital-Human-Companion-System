@@ -646,11 +646,11 @@ const msgHandlers = {
     renderReminders();
   },
   crisis_alert(d) {
-    showCrisisBanner(d.hotlines || []);
+    showCrisisBanner(d.hotlines || [], d.contactAction || null);
   },
 };
 
-function showCrisisBanner(hotlines) {
+function showCrisisBanner(hotlines, contactAction = null) {
   const existing = document.getElementById('crisisBanner');
   if (existing) existing.remove();
 
@@ -697,6 +697,29 @@ function showCrisisBanner(hotlines) {
 
   body.appendChild(title);
   body.appendChild(list);
+
+  // 家属紧急联系（后端 contactAction，仅在已配置且可拨打时显示）
+  if (contactAction && contactAction.ok && contactAction.phone) {
+    const contact = contactAction.contact || {};
+    const famName = contact.displayName || '家属';
+    const famRow = document.createElement('div');
+    famRow.style.cssText = 'margin-top:8px;display:flex;align-items:center;gap:8px;';
+    const famLabel = document.createElement('span');
+    famLabel.style.cssText = 'font-size:13px;color:#b91c1c;';
+    famLabel.textContent = '或一键联系家属：';
+    const famChip = document.createElement('a');
+    famChip.href = `tel:${contactAction.phone}`;
+    famChip.style.cssText = [
+      'display:inline-flex', 'align-items:center', 'gap:4px',
+      'background:#fecaca', 'border:1px solid #f87171', 'border-radius:20px',
+      'padding:4px 12px', 'font-size:14px', 'color:#7f1d1d',
+      'text-decoration:none', 'font-weight:700',
+    ].join(';');
+    famChip.textContent = `📞 ${famName} ${contactAction.phone}`;
+    famRow.appendChild(famLabel);
+    famRow.appendChild(famChip);
+    body.appendChild(famRow);
+  }
 
   const closeBtn = document.createElement('button');
   closeBtn.type = 'button';

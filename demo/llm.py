@@ -30,10 +30,18 @@ embedder = SentenceTransformer(_BGE_LOCAL if os.path.isdir(_BGE_LOCAL) else 'BAA
 chroma_client = chromadb.PersistentClient(path="./vector_db")
 try:
     psy_collection = chroma_client.get_collection(name="psy_cbt_knowledge")
-    print(f"[RAG] 知识库已加载，共 {psy_collection.count()} 条数据")
+    print(f"[RAG] PsyQA 知识库已加载，共 {psy_collection.count()} 条数据")
 except Exception:
     psy_collection = chroma_client.get_or_create_collection(name="psy_cbt_knowledge")
-    print("[RAG] 知识库为空，RAG 功能不可用。请先运行 build_kb.py 导入数据。")
+    print("[RAG] PsyQA 知识库为空，请先运行 build_kb.py 导入数据。")
+
+# SoulChat 多轮咨询语料（可选，缺失则仅用 PsyQA）
+try:
+    soulchat_collection = chroma_client.get_collection(name="soulchat_knowledge")
+    print(f"[RAG] SoulChat 知识库已加载，共 {soulchat_collection.count()} 条数据")
+except Exception:
+    soulchat_collection = None
+    print("[RAG] SoulChat 知识库未启用（运行 build_kb_soulchat.py 可接入）。")
 # --------------------------------
 
 INTERRUPT_COMMAND_HINTS = [
@@ -107,27 +115,41 @@ def get_session_messages(session_id):
 _RAG_DISTANCE_THRESHOLD = 0.8
 
 def _sync_retrieve(user_text: str, top_k: int = 2) -> str:
-    """同步的检索核心逻辑"""
+    """同步检索：PsyQA + SoulChat 两库各取 top_k，按距离合并后取全局 top_k。"""
     if len(user_text.strip()) < 5:
         return ""
     try:
-        # 1. 提问向量化
         query_embedding = embedder.encode([user_text]).tolist()
 
-        # 2. 向量库检索
-        results = psy_collection.query(
-            query_embeddings=query_embedding,
-            n_results=top_k
-        )
+        # 两库分别检索，汇总候选 (doc, distance)
+        candidates = []
+        for coll in (psy_collection, soulchat_collection):
+            if coll is None:
+                continue
+            results = coll.query(query_embeddings=query_embedding, n_results=top_k)
+            docs = results["documents"][0]
+            distances = results["distances"][0]
+            candidates.extend(zip(docs, distances))
 
-        # 3. 过滤低相关结果（距离阈值 0.8，超出则视为无关）
-        docs = results['documents'][0]
-        distances = results['distances'][0]
-        relevant = [(doc, dist) for doc, dist in zip(docs, distances) if dist < _RAG_DISTANCE_THRESHOLD]
+        # 过滤低相关（距离阈值 0.8）+ 按距离升序，去重后取全局 top_k
+        # 去重：PsyQA 同一答案可能被多次索引，避免重复案例占满上下文
+        ordered = sorted(
+            (item for item in candidates if item[1] < _RAG_DISTANCE_THRESHOLD),
+            key=lambda item: item[1],
+        )
+        relevant, seen = [], set()
+        for doc, dist in ordered:
+            if doc in seen:
+                continue
+            seen.add(doc)
+            relevant.append(doc)
+            if len(relevant) >= top_k:
+                break
         if not relevant:
             return ""
-        context = "\n\n".join([f"参考干预案例 {i+1}:\n{doc}" for i, (doc, _) in enumerate(relevant)])
-        return context
+        return "\n\n".join(
+            f"参考干预案例 {i+1}:\n{doc}" for i, doc in enumerate(relevant)
+        )
     except Exception as e:
         print(f"知识库检索失败: {e}")
         return ""
@@ -214,7 +236,8 @@ async def classify_interrupt_intent(user_text, current_reply_text="", pending_re
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.1,
-        "max_tokens": 16,
+        # 推理模型：思考占 reasoning_content，须留足预算否则标签（content）为空 → 误判
+        "max_tokens": 512,
         "stream": False
     }
 
@@ -260,7 +283,8 @@ async def build_followup_reply(user_text, emotion, current_reply_text="", pendin
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.7,
-        "max_tokens": 256,
+        # 推理模型：reasoning_content 额外占用，须为回复（50-120字）留足预算
+        "max_tokens": 1024,
         "stream": False
     }
 
