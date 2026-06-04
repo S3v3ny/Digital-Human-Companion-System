@@ -26,7 +26,7 @@ python download_models.py     # 下载 whisper-small / SER 语音情感 / BGE �
 
 > 危机风险分类器（SOS-1K 训练）与 SoulChat 多轮语料知识库的接入说明，见**项目根目录 [README.md](../README.md) 步骤 5、6**。分类器 `models/crisis-bert/classifier.pkl` 已随仓库同步，开箱即用。
 
-- **SER 语音情感模型**是「共情反应」功能所需：`download_models.py` 会把 `xmj2002/hubert-base-ch-speech-emotion-recognition` 下到 `./models/ser-model/`，正好对应代码默认路径，无需额外配置。
+- **SER 语音情感模型**是「共情反应」功能所需：`download_models.py` 会把 `firdhokk/speech-emotion-recognition-with-facebook-wav2vec2-large-xlsr-53`（wav2vec2-large-xlsr-53 微调，7 种情绪，约 1.2GB）下到 `./models/ser-model/`，正好对应代码默认路径，无需额外配置。
 - 不下载也不会让程序崩溃，但**共情表情会静默失效**（SER 加载失败时自动跳过）。
 - 想换别的 SER 模型，用环境变量 `SER_MODEL` 指定本地目录或 HuggingFace 模型名（见下方「环境变量」）。
 - 以上模型也可从网盘 `models/` 直接下载（见顶部链接），二选一即可。
