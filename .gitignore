@@ -15,6 +15,9 @@ demo/wav2vec2_xlsr53_local/
 # 保留项目自己的 LoRA 微调权重
 !demo/whisper-final-model/adapter_model.safetensors
 
+# 保留 HeadAudio 实时口型模型（~14KB），开箱即用无需另下
+!demo/public/model-en-mixed.bin
+
 # 知识库数据库
 demo/vector_db/
 
