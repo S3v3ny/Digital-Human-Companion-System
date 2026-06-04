@@ -26,10 +26,21 @@ python download_models.py     # 下载 whisper-small / SER 语音情感 / BGE �
 
 > 危机风险分类器（SOS-1K 训练）与 SoulChat 多轮语料知识库的接入说明，见**项目根目录 [README.md](../README.md) 步骤 5、6**。分类器 `models/crisis-bert/classifier.pkl` 已随仓库同步，开箱即用。
 
-- **SER 语音情感模型**是「共情反应」功能所需：`download_models.py` 会把 `firdhokk/speech-emotion-recognition-with-facebook-wav2vec2-large-xlsr-53`（wav2vec2-large-xlsr-53 微调，7 种情绪，约 1.2GB）下到 `./models/ser-model/`，正好对应代码默认路径，无需额外配置。
-- 不下载也不会让程序崩溃，但**共情表情会静默失效**（SER 加载失败时自动跳过）。
-- 想换别的 SER 模型，用环境变量 `SER_MODEL` 指定本地目录或 HuggingFace 模型名（见下方「环境变量」）。
-- 以上模型也可从网盘 `models/` 直接下载（见顶部链接），二选一即可。
+#### 「共情反应」SER 语音情感模型 —— 怎么下、怎么用
+
+**作用**：识别用户说话时的语音情绪，让数字人在听你说话时做出对应的「共情表情」。
+
+1. **下载**：运行上面的 `python download_models.py` 即可，它会自动把 SER 模型
+   `firdhokk/speech-emotion-recognition-with-facebook-wav2vec2-large-xlsr-53`
+   下载到 `./models/ser-model/`。
+   - 模型基于 **wav2vec2-large-xlsr-53** 微调，识别 **7 种情绪**：生气 / 厌恶 / 害怕 / 开心 / 中性 / 难过 / 惊讶，约 **1.2GB**。
+   - 脚本已内置 **hf-mirror 国内镜像**，**无需翻墙**，保持联网耐心等待即可。
+2. **使用**：下载到位后**不用做任何配置**——代码默认就从 `./models/ser-model/` 加载。启动 `python server.py`，在网页上按住说话，数字人就会根据你的语气切换共情表情。
+3. **不下载也能跑**：缺少 SER 模型时程序**不会崩溃**，只是「共情表情」这一项静默失效，其它功能（对话、语音、提醒等）照常。
+4. **（可选）换模型 / 调灵敏度**：在 `demo/.env` 里设置（详见下方「环境变量」）：
+   - `SER_MODEL=` 换成别的本地目录或 HuggingFace 模型名（如更轻量的中文模型 `xmj2002/hubert-base-ch-speech-emotion-recognition`）；不设则用默认。
+   - `SER_NON_NEUTRAL_THRESHOLD=0.20` 去偏置阈值，越小越容易表现出非中性情绪。
+5. **（备选）网盘下载**：也可从顶部网盘链接里直接下载 `models/` 文件夹，与方式 1 二选一。
 
 主要依赖（已在 `requirements.txt` 列出）：
 - **FastAPI / uvicorn** — Web 服务和 WebSocket
