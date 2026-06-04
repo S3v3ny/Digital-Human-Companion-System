@@ -3,7 +3,7 @@
 
 模型列表：
   1. openai/whisper-small         → ./models/whisper-small-model/
-  2. xmj2002/hubert-base-ch-speech-emotion-recognition → ./models/ser-model/
+  2. firdhokk/speech-emotion-recognition-with-facebook-wav2vec2-large-xlsr-53 → ./models/ser-model/
   3. BAAI/bge-small-zh-v1.5       → ./models/bge-small-zh-v1.5/
 
 用法：
@@ -55,10 +55,10 @@ def download_whisper_small():
 
 
 def download_ser_model():
-    banner("[2/3] 下载 xmj2002/hubert-base-ch-speech-emotion-recognition（中文语音情感识别）")
+    banner("[2/3] 下载 firdhokk/...wav2vec2-large-xlsr-53（语音情感识别 SER，7 情绪）")
     from transformers import AutoModelForAudioClassification, AutoFeatureExtractor
 
-    repo_id = "xmj2002/hubert-base-ch-speech-emotion-recognition"
+    repo_id = "firdhokk/speech-emotion-recognition-with-facebook-wav2vec2-large-xlsr-53"
     save_dir = os.path.join(MODELS_DIR, "ser-model")
     os.makedirs(save_dir, exist_ok=True)
 
@@ -68,7 +68,7 @@ def download_ser_model():
     feature_extractor.save_pretrained(save_dir)
     print("[OK] 特征提取器下载完成")
 
-    print("下载模型权重（约 370 MB）...")
+    print("下载模型权重（约 1.2 GB）...")
     model = AutoModelForAudioClassification.from_pretrained(repo_id)
     model.save_pretrained(save_dir)
     print(f"[OK] SER 模型下载完成 → {save_dir}")
