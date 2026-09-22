@@ -1,4 +1,4 @@
-# Digtal-Human-Companion-System
+# Digital Human Companion System
 
 【A22】基于AI大语言模型的情感陪护虚拟数字人系统
 
@@ -12,12 +12,11 @@
 
 ## 仓库内已包含 / 需另外获取
 
-随仓库同步（clone 即得，**私有仓库**，含 `.env` 密钥，无需再配）：
+随仓库同步（clone 即得）：
 
 - 全部源码、前端、3D 头部模型（`demo/public/*.glb`）
 - Whisper LoRA 微调权重（`demo/whisper-final-model/`）
 - 危机风险分类器 `demo/models/crisis-bert/classifier.pkl`（SOS-1K 训练，开箱即用）
-- `demo/.env`（已含 DeepSeek、Azure 等密钥）
 
 **体积过大（>100MB，GitHub 无法同步）需另外下载**，见下方步骤：
 
@@ -47,13 +46,13 @@
 > python server.py                                                     # 5 启动 → http://localhost:8000
 > ```
 >
-> 危机分类器(`classifier.pkl`)、ASR 微调权重、`.env` 密钥已随仓库同步，无需额外操作。
+> 危机分类器（`classifier.pkl`）和 ASR 微调权重已随仓库同步。首次运行前，请从 `demo/.env.example` 复制生成 `demo/.env`，并填写你自己的服务密钥。
 
 ### 1. 克隆仓库
 
 ```bash
-git clone https://github.com/wt-5783/Digtal-Human-Companion-System.git
-cd Digtal-Human-Companion-System/demo
+git clone https://github.com/S3v3ny/Digital-Human-Companion-System.git
+cd Digital-Human-Companion-System/demo
 ```
 
 ### 2. 安装环境
@@ -123,7 +122,14 @@ python train_crisis_classifier.py    # 输出覆盖 models/crisis-bert/classifie
 
 ### 7. 配置 `.env`
 
-`.env` 已随仓库同步，含 DeepSeek（`API_KEY`，模型 `deepseek-v4-pro`）与 Azure 语音密钥，正常情况无需改动。如需更换，编辑 `demo/.env`：
+真实密钥不会随仓库分发。先复制示例配置，再填写你自己的 DeepSeek 与 Azure 凭据：
+
+```bash
+cd demo
+cp .env.example .env
+```
+
+然后编辑 `demo/.env`：
 
 ```ini
 API_KEY=<DeepSeek API Key>              # LLM，接口 https://api.deepseek.com
@@ -161,3 +167,11 @@ docker compose build
 通过网盘分享的文件：digital-human.tar.gz
 链接: https://pan.baidu.com/s/1O3mpjuZEwIx1IbqzgB5stg?pwd=eyqz 提取码: eyqz
 ```
+
+---
+
+## 安全与使用边界
+
+- 不要将 `.env`、API 密钥或访问令牌提交到 Git。
+- 本项目仅用于授权环境、课程研究和竞赛演示。
+- 心理危机识别与建议仅用于技术研究，不能替代医生、心理咨询师或紧急救援服务。
